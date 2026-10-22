@@ -367,7 +367,6 @@ def top_earners(df):
         "director_caption": director_caption,
     }
 
-
 def runtime_vs_score(df):
     """Q5: Is runtime related to score?"""
     r, n = pearson_r(df["runtime"], df["score"])
