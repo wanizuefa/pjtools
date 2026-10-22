@@ -49,7 +49,7 @@
 
 {# ------------------------------------------------------- Key findings #}
 <section class="home-section" aria-labelledby="findings-title">
-  <h2 class="section-title" id="findings-title"><span aria-hidden="true">🎟️</span> ข้อค้นพบสำคัญ</h2>
+  <h2 class="section-title" id="findings-title">ข้อค้นพบสำคัญ</h2>
   <div class="finding-grid">
     <article class="ticket finding">
       <div class="ticket__stub" aria-hidden="true"><span class="ticket__emoji">💰</span><span class="ticket__admit">FINDING 1</span></div>
@@ -80,30 +80,26 @@
       </div>
     </article>
   </div>
-  <p class="topic__note"><span aria-hidden="true">ℹ️</span> ตัวเลขทั้งหมดคำนวณใหม่จากไฟล์ <code>data/movies.xlsx</code> ทุกครั้งที่เปิดหน้า</p>
+  <p class="topic__note">ตัวเลขทั้งหมดคำนวณใหม่จากไฟล์ <code>data/movies.xlsx</code> ทุกครั้งที่เปิดหน้า</p>
 </section>
 
 {# ----------------------------------------------------------- Shortcuts #}
 <nav class="home-section" aria-labelledby="shortcuts-title">
-  <h2 class="section-title" id="shortcuts-title"><span aria-hidden="true">🎬</span> เลือกโรงที่จะเข้าชม</h2>
+  <h2 class="section-title" id="shortcuts-title">เลือกโรงที่จะเข้าชม</h2>
   <ul class="shortcut-grid">
     <li><a class="shortcut" href="{{ url_for('movies') }}">
-      <span class="shortcut__icon" aria-hidden="true">🎞️</span>
       <span class="shortcut__title">รายการหนัง</span>
       <span class="shortcut__desc">ค้นหา กรอง เพิ่ม แก้ไข และลบข้อมูลลงไฟล์ Excel</span>
     </a></li>
     <li><a class="shortcut" href="{{ url_for('analysis') }}">
-      <span class="shortcut__icon" aria-hidden="true">📊</span>
       <span class="shortcut__title">วิเคราะห์ข้อมูล</span>
       <span class="shortcut__desc">สถิติ กราฟ correlation และ regression ตามคำถามวิจัย 6 ข้อ</span>
     </a></li>
     <li><a class="shortcut" href="{{ url_for('simulator') }}">
-      <span class="shortcut__icon" aria-hidden="true">🎬</span>
       <span class="shortcut__title">Box Office Simulator</span>
       <span class="shortcut__desc">สร้างหนังสมมติ แล้วดูว่าจะเป็น Blockbuster หรือ Flop</span>
     </a></li>
     <li><a class="shortcut" href="{{ url_for('dashboard') }}">
-      <span class="shortcut__icon" aria-hidden="true">🗺️</span>
       <span class="shortcut__title">Dashboard</span>
       <span class="shortcut__desc">Dashboard จาก Tableau Public</span>
     </a></li>

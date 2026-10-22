@@ -22,7 +22,6 @@
   <header class="site-header">
     <nav class="navbar" aria-label="เมนูหลัก">
       <a class="brand" href="{{ url_for('home') }}">
-        <span class="brand__icon" aria-hidden="true">🎬</span>
         <span class="brand__name">{{ site_name }}</span>
       </a>
 
@@ -56,7 +55,6 @@
     <div class="ticket ticket--{{ category }}" data-flash
          {% if category == 'success' %}data-sound="clapper"{% endif %}>
       <div class="ticket__stub" aria-hidden="true">
-        <span class="ticket__emoji">{{ '🎟️' if category == 'success' else '⚠️' }}</span>
         <span class="ticket__admit">{{ 'ADMIT ONE' if category == 'success' else 'NO ENTRY' }}</span>
       </div>
       <div class="ticket__body">
@@ -102,7 +100,6 @@
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <form method="dialog" class="ticket ticket--danger confirm-dialog__ticket">
       <div class="ticket__stub" aria-hidden="true">
-        <span class="ticket__emoji">🗑️</span>
         <span class="ticket__admit">VOID</span>
       </div>
       <div class="ticket__body">

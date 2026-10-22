@@ -696,6 +696,212 @@ def simulate(models, df, genre, budget, runtime, year, rating=""):
     }
 
 
+# ---------------------------------------------------------------------------
+# Comparison with Excel's Analysis ToolPak (results read by data_service)
+# ---------------------------------------------------------------------------
+# Two separate checks:
+#   1. Accuracy  - Python recomputes each statistic from the SAME data that is
+#                  inside analysis.xlsx, so it must equal the ToolPak value.
+#   2. Freshness - the data inside analysis.xlsx is compared with the current
+#                  movies.xlsx; if the web has new rows, Excel needs a re-run.
+
+DESCRIPTIVE_LABELS = {
+    "Mean": "ค่าเฉลี่ย (Mean)",
+    "Standard Error": "ความคลาดเคลื่อนมาตรฐาน (Standard Error)",
+    "Median": "มัธยฐาน (Median)",
+    "Mode": "ฐานนิยม (Mode)",
+    "Standard Deviation": "ส่วนเบี่ยงเบนมาตรฐาน (SD)",
+    "Sample Variance": "ความแปรปรวน (Sample Variance)",
+    "Kurtosis": "ความโด่ง (Kurtosis)",
+    "Skewness": "ความเบ้ (Skewness)",
+    "Range": "พิสัย (Range)",
+    "Minimum": "ค่าต่ำสุด (Minimum)",
+    "Maximum": "ค่าสูงสุด (Maximum)",
+    "Sum": "ผลรวม (Sum)",
+    "Count": "จำนวน (Count)",
+}
+MONEY_COLUMNS = {"budget", "gross"}
+
+
+def find_column(frame, name):
+    """Column of `frame` whose name matches `name` ignoring case, or None."""
+    for column in frame.columns:
+        if str(column).strip().lower() == str(name).strip().lower():
+            return column
+    return None
+
+
+def numeric(frame, name):
+    column = find_column(frame, name)
+    return pd.to_numeric(frame[column], errors="coerce") if column is not None else None
+
+
+def values_match(a, b, tolerance=1e-6):
+    """Equal within a relative tolerance (floating-point rounding)."""
+    if a is None or b is None:
+        return False
+    return abs(a - b) <= tolerance * max(abs(a), abs(b), 1e-12)
+
+
+def describe_like_toolpak(values):
+    """The 13 statistics of ToolPak's Descriptive Statistics (Excel definitions)."""
+    values = values.dropna()
+    if values.empty:
+        return {}
+    counts = values.value_counts(sort=False)  # first-appearance order, like Excel MODE
+    mode = float(counts.idxmax()) if counts.max() > 1 else None
+    sd = float(values.std())
+    return {
+        "Mean": float(values.mean()),
+        "Standard Error": sd / math.sqrt(len(values)),
+        "Median": float(values.median()),
+        "Mode": mode,
+        "Standard Deviation": sd,
+        "Sample Variance": float(values.var()),
+        "Kurtosis": float(values.kurt()),   # same formula as Excel KURT
+        "Skewness": float(values.skew()),   # same formula as Excel SKEW
+        "Range": float(values.max() - values.min()),
+        "Minimum": float(values.min()),
+        "Maximum": float(values.max()),
+        "Sum": float(values.sum()),
+        "Count": float(len(values)),
+    }
+
+
+def regression_like_toolpak(x, y):
+    """Simple regression statistics in the same form as ToolPak's SUMMARY OUTPUT."""
+    reg = linear_regression(x, y)
+    if reg is None:
+        return {}
+    pair = pd.DataFrame({"x": x, "y": y}).dropna()
+    n = len(pair)
+    residuals = pair["y"] - (reg["slope"] * pair["x"] + reg["intercept"])
+    ss_res = float((residuals ** 2).sum())
+    ss_reg = float(((reg["slope"] * pair["x"] + reg["intercept"] - pair["y"].mean()) ** 2).sum())
+    return {
+        "Coefficient": reg["slope"],
+        "Intercept": reg["intercept"],
+        "Multiple R": math.sqrt(max(reg["r2"], 0.0)),
+        "R Square": reg["r2"],
+        "Adjusted R Square": 1 - (1 - reg["r2"]) * (n - 1) / (n - 2),
+        "Standard Error": math.sqrt(ss_res / (n - 2)),
+        "Observations": float(n),
+        "F": ss_reg / (ss_res / (n - 2)) if ss_res else None,
+    }
+
+
+def format_p_value(p):
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+
+def toolpak_comparison(df, toolpak):
+    """Compare ToolPak results with Python (same data) and with the current web data."""
+    if toolpak is None:
+        return {"status": "missing"}
+    if "error" in toolpak:
+        return {"status": "error", "error": toolpak["error"]}
+
+    excel_data, reg_data = toolpak["data"], toolpak["regression_data"]
+    groups = []
+
+    def row(label, excel, python, current, kind):
+        return {"label": label, "excel": excel, "python": python, "current": current,
+                "kind": kind, "match": values_match(excel, python)}
+
+    # Regression (one X variable)
+    reg = toolpak["regression"]
+    x_coef = next((c for c in reg["coefficients"] if c["name"].lower() != "intercept"), None)
+    intercept = next((c for c in reg["coefficients"] if c["name"].lower() == "intercept"), None)
+    interpretation = ""
+    if x_coef and intercept and not reg_data.empty:
+        x_name = x_coef["name"]
+        y_column = next((c for c in reg_data.columns if str(c).lower() != x_name.lower()), None)
+        y_name = str(y_column)
+        python = regression_like_toolpak(numeric(reg_data, x_name), numeric(reg_data, y_name))
+        fin = financial_rows(df)
+        current = (regression_like_toolpak(fin[x_name.lower()], fin[y_name.lower()])
+                   if x_name.lower() in fin and y_name.lower() in fin else {})
+        money = "money" if y_name.lower() in MONEY_COLUMNS else "dec4"
+        excel_f = reg["anova"].get("Regression", {}).get("F")
+        groups.append({
+            "title": f"Regression: {x_name} → {y_name}",
+            "rows": [
+                row("ความชัน (Coefficient ของ " + x_name + ")", x_coef.get("Coefficients"),
+                    python.get("Coefficient"), current.get("Coefficient"), "dec4"),
+                row("จุดตัดแกน (Intercept)", intercept.get("Coefficients"),
+                    python.get("Intercept"), current.get("Intercept"), money),
+                row("Multiple R", reg["stats"].get("Multiple R"), python.get("Multiple R"), current.get("Multiple R"), "dec4"),
+                row("R Square", reg["stats"].get("R Square"), python.get("R Square"), current.get("R Square"), "dec4"),
+                row("Adjusted R Square", reg["stats"].get("Adjusted R Square"),
+                    python.get("Adjusted R Square"), current.get("Adjusted R Square"), "dec4"),
+                row("Standard Error", reg["stats"].get("Standard Error"),
+                    python.get("Standard Error"), current.get("Standard Error"), money),
+                row("F", excel_f, python.get("F"), current.get("F"), "dec2"),
+                row("Observations", reg["stats"].get("Observations"),
+                    python.get("Observations"), current.get("Observations"), "int"),
+            ],
+        })
+        p = x_coef.get("P-value")
+        if p is not None:
+            significant = p < 0.05
+            interpretation = (
+                f"ความชันของ {x_name} = {x_coef['Coefficients']:.2f} "
+                f"(ช่วงความเชื่อมั่น 95%: {x_coef.get('Lower 95%', float('nan')):.2f} ถึง "
+                f"{x_coef.get('Upper 95%', float('nan')):.2f}) และ P-value {format_p_value(p)} "
+                + ("ซึ่งน้อยกว่า 0.05 จึงสรุปได้ว่าความสัมพันธ์นี้มีนัยสำคัญทางสถิติ"
+                   if significant else "ซึ่งไม่น้อยกว่า 0.05 จึงยังสรุปไม่ได้ว่ามีความสัมพันธ์อย่างมีนัยสำคัญ")
+            )
+
+    # Correlation pairs
+    corr_rows = []
+    for (a, b), excel_r in toolpak["correlation"]["pairs"].items():
+        source = reg_data if find_column(reg_data, a) is not None and find_column(reg_data, b) is not None else excel_data
+        python_r, _ = pearson_r(numeric(source, a), numeric(source, b)) if not source.empty else (None, 0)
+        current_r = (pearson_r(df[a.lower()], df[b.lower()])[0]
+                     if a.lower() in df and b.lower() in df else None)
+        corr_rows.append(row(f"r ({a} กับ {b})", excel_r, python_r, current_r, "dec4"))
+    if corr_rows:
+        groups.append({"title": "Correlation", "rows": corr_rows})
+
+    # Descriptive statistics, one group per variable
+    for variable, stats in toolpak["descriptive"].items():
+        python = describe_like_toolpak(numeric(excel_data, variable)) if numeric(excel_data, variable) is not None else {}
+        current = describe_like_toolpak(df[variable.lower()]) if variable.lower() in df else {}
+        is_money = variable.lower() in MONEY_COLUMNS
+        rows = []
+        for label, excel_value in stats.items():
+            kind = "int" if label == "Count" else ("money" if is_money and label not in
+                                                   ("Kurtosis", "Skewness") else "dec4")
+            rows.append(row(DESCRIPTIVE_LABELS.get(label, label), excel_value,
+                            python.get(label), current.get(label), kind))
+        groups.append({"title": f"Descriptive Statistics: {variable}", "rows": rows})
+
+    all_rows = [r for g in groups for r in g["rows"]]
+    excel_movies = len(excel_data) if not excel_data.empty else None
+    excel_financial = reg["stats"].get("Observations")
+    current_financial = len(financial_rows(df))
+    stale = ((excel_movies is not None and excel_movies != len(df))
+             or (excel_financial is not None and int(excel_financial) != current_financial))
+    return {
+        "status": "ok",
+        "modified": toolpak["modified"],
+        "groups": groups,
+        "matches": sum(r["match"] for r in all_rows),
+        "total": len(all_rows),
+        "regression": reg,
+        "descriptive": toolpak["descriptive"],
+        "correlation": toolpak["correlation"],
+        "interpretation": interpretation,
+        "freshness": {
+            "stale": stale,
+            "excel_movies": excel_movies,
+            "current_movies": len(df),
+            "excel_financial": int(excel_financial) if excel_financial is not None else None,
+            "current_financial": current_financial,
+        },
+    }
+
+
 def run_analysis(df):
     """Everything the analysis page needs, recomputed from the current data."""
     return {

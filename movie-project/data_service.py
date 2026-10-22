@@ -390,3 +390,148 @@ def validate_movie(form):
     record["runtime"] = _parse_number(form, "runtime", errors, "ความยาว", 1, 600)
 
     return record, errors
+
+
+# ---------------------------------------------------------------------------
+# Analysis ToolPak results (data/analysis.xlsx) - READ ONLY
+# ---------------------------------------------------------------------------
+# The group runs Excel's Analysis ToolPak in data/analysis.xlsx. The web only
+# reads that file and never writes to it: saving it with openpyxl would drop
+# Excel charts and other features. Values are found by their row labels
+# ("R Square", "Mean", ...), not by fixed cell addresses, so the layout can
+# shift a little without breaking anything.
+
+ANALYSIS_XLSX_PATH = os.path.join(DATA_DIR, "analysis.xlsx")
+TOOLPAK_SHEETS = {
+    "descriptive_prefix": "Descriptive",   # every sheet starting with this
+    "correlation": "Correlation",
+    "regression": "Regression",
+    "regression_data": "Regression_Data",  # the X/Y columns given to Regression
+    "data": "movies",                      # the movie data the other tools used
+}
+
+_toolpak_cache = {"mtime": None, "data": None}
+
+
+def _sheet_rows(workbook, name):
+    """All rows of a sheet as lists of values (empty list if the sheet is missing)."""
+    if name not in workbook.sheetnames:
+        return []
+    return [list(row) for row in workbook[name].iter_rows(values_only=True)]
+
+
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _rows_to_frame(rows):
+    """First row = header; drops fully empty rows."""
+    if not rows:
+        return pd.DataFrame()
+    header = [str(h).strip() if h is not None else f"col{i}" for i, h in enumerate(rows[0])]
+    body = [r for r in rows[1:] if any(v is not None for v in r)]
+    return pd.DataFrame(body, columns=header)
+
+
+def parse_descriptive(rows):
+    """ToolPak Descriptive Statistics: variable names on the first row, then
+    label/value pairs (A/B, C/D, ...) below. Returns {variable: {label: value}}."""
+    result = {}
+    if not rows:
+        return result
+    for col in range(0, len(rows[0]), 2):
+        name = rows[0][col]
+        if name is None:
+            continue
+        stats = {}
+        for row in rows[1:]:
+            label = row[col] if col < len(row) else None
+            value = row[col + 1] if col + 1 < len(row) else None
+            if label is not None and _is_number(value):
+                stats[str(label).strip()] = float(value)
+        result[str(name).strip()] = stats
+    return result
+
+
+def parse_correlation(rows):
+    """ToolPak Correlation matrix (lower triangle). Returns
+    {"labels": [...], "pairs": {(a, b): r}} with every pair stored once."""
+    if not rows:
+        return {"labels": [], "pairs": {}}
+    labels = [str(v).strip() for v in rows[0][1:] if v is not None]
+    pairs = {}
+    for row in rows[1:]:
+        if not row or row[0] is None:
+            continue
+        a = str(row[0]).strip()
+        for j, b in enumerate(labels):
+            value = row[j + 1] if j + 1 < len(row) else None
+            if _is_number(value) and a != b and (b, a) not in pairs:
+                pairs[(a, b)] = float(value)
+    return {"labels": labels, "pairs": pairs}
+
+
+def parse_regression(rows):
+    """ToolPak Regression SUMMARY OUTPUT: statistics, ANOVA and coefficients."""
+    stats, anova, coefficients, headers = {}, {}, [], []
+    section = "stats"
+    for row in rows:
+        first = str(row[0]).strip() if row and row[0] is not None else ""
+        second = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+        if first == "ANOVA":
+            section = "anova"
+            continue
+        if second == "Coefficients":
+            section = "coefficients"
+            headers = [str(v).strip() if v is not None else "" for v in row[1:]]
+            continue
+        if not first:
+            continue
+        if section == "stats" and len(row) > 1 and _is_number(row[1]):
+            stats[first] = float(row[1])
+        elif section == "anova":
+            anova[first] = {h: float(v) for h, v in zip(["df", "SS", "MS", "F", "Significance F"], row[1:6])
+                            if _is_number(v)}
+        elif section == "coefficients":
+            values = {h: float(v) for h, v in zip(headers, row[1:]) if h and _is_number(v)}
+            if values:
+                coefficients.append({"name": first, **values})
+    return {"stats": stats, "anova": anova, "coefficients": coefficients, "headers": headers}
+
+
+def read_toolpak_results():
+    """Read data/analysis.xlsx. Returns None when the file does not exist,
+    a dict with "error" when it cannot be read, otherwise the parsed results.
+    Re-read only when the file changes."""
+    if not os.path.exists(ANALYSIS_XLSX_PATH):
+        return None
+    mtime = os.path.getmtime(ANALYSIS_XLSX_PATH)
+    if _toolpak_cache["mtime"] == mtime:
+        return _toolpak_cache["data"]
+
+    try:
+        import openpyxl  # imported here: only needed for this read-only file
+        workbook = openpyxl.load_workbook(ANALYSIS_XLSX_PATH, data_only=True, read_only=True)
+        try:
+            descriptive = {}
+            for name in workbook.sheetnames:
+                if name.startswith(TOOLPAK_SHEETS["descriptive_prefix"]):
+                    descriptive.update(parse_descriptive(_sheet_rows(workbook, name)))
+            data = {
+                "path": ANALYSIS_XLSX_PATH,
+                "modified": datetime.fromtimestamp(mtime),
+                "sheets": workbook.sheetnames,
+                "descriptive": descriptive,
+                "correlation": parse_correlation(_sheet_rows(workbook, TOOLPAK_SHEETS["correlation"])),
+                "regression": parse_regression(_sheet_rows(workbook, TOOLPAK_SHEETS["regression"])),
+                "regression_data": _rows_to_frame(_sheet_rows(workbook, TOOLPAK_SHEETS["regression_data"])),
+                "data": _rows_to_frame(_sheet_rows(workbook, TOOLPAK_SHEETS["data"])),
+            }
+        finally:
+            workbook.close()
+    except Exception as exc:  # a broken or locked file must not break the page
+        data = {"error": f"อ่านไฟล์ analysis.xlsx ไม่ได้ ({exc.__class__.__name__}: {exc})"}
+
+    _toolpak_cache["mtime"] = mtime
+    _toolpak_cache["data"] = data
+    return data

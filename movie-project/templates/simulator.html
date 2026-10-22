@@ -12,7 +12,7 @@
 </section>
 
 <aside class="notice-box notice-box--compact" aria-labelledby="sim-disclaimer-title">
-  <h2 class="notice-box__title" id="sim-disclaimer-title"><span aria-hidden="true">⚠️</span> เป็นการประมาณ ไม่ใช่การทำนายที่แม่นยำ</h2>
+  <h2 class="notice-box__title" id="sim-disclaimer-title">เป็นการประมาณ ไม่ใช่การทำนายที่แม่นยำ</h2>
   <p class="notice-box__text">
     ผลลัพธ์คำนวณด้วย Linear Regression จากหนังจริงในไฟล์ Excel ปัจจุบัน เป็นแนวโน้มจากข้อมูลในอดีตเท่านั้น
     รายได้จริงของหนังขึ้นกับปัจจัยอีกมากที่โมเดลไม่รู้ เช่น นักแสดง เนื้อเรื่อง การตลาด และคู่แข่งในช่วงฉาย
@@ -26,7 +26,11 @@
   <form class="panel sim-form" id="sim-form" novalidate
         data-budget-min="{{ r.budget_min }}" data-budget-max="{{ r.budget_max }}"
         data-budget-default="{{ r.budget_default }}">
+<<<<<<< HEAD
     <h2 class="panel__title"><span aria-hidden="true"></span> ใบสั่งงานสร้าง</h2>
+=======
+    <h2 class="panel__title">ใบสั่งงานสร้าง</h2>
+>>>>>>> 8fcad022065d4027e541de5e43102a5c8132403a
 
     <fieldset class="genre-picker">
       <legend>ประเภทหนัง</legend>
@@ -88,14 +92,14 @@
     </div>
 
     <button class="btn btn--gold btn--lg sim-button" id="sim-button" type="submit">
-      <span aria-hidden="true">🎬</span> <span class="sim-button__label">เริ่มถ่ายทำ</span>
+      <span class="sim-button__label">เริ่มถ่ายทำ</span>
     </button>
     <noscript><p class="field-error">หน้านี้ต้องเปิด JavaScript เพื่อใช้งาน Simulator</p></noscript>
   </form>
 
   {# ------------------------------------------------------------- Stage #}
   <section class="panel sim-stage" id="sim-stage" aria-labelledby="stage-title" aria-busy="false">
-    <h2 class="panel__title" id="stage-title"><span aria-hidden="true">🎥</span> ผลการถ่ายทำ</h2>
+    <h2 class="panel__title" id="stage-title">ผลการถ่ายทำ</h2>
 
     <div class="clapper clapper--small" id="sim-clapper" aria-hidden="true">
       <div class="clapper__stick"></div>
@@ -113,7 +117,6 @@
     </div>
 
     <div class="sim-placeholder" id="sim-placeholder">
-      <p class="sim-placeholder__icon" aria-hidden="true">🍿</p>
       <p>เลือกส่วนผสมทางซ้าย แล้วกด <strong>เริ่มถ่ายทำ</strong></p>
     </div>
 
@@ -153,7 +156,7 @@
 
 {# -------------------------------------------------------- Similar movies #}
 <section class="panel" id="similar-panel" aria-labelledby="similar-title" hidden>
-  <h2 class="panel__title" id="similar-title"><span aria-hidden="true">🎞️</span> หนังจริงที่ใกล้เคียงที่สุด 5 เรื่อง</h2>
+  <h2 class="panel__title" id="similar-title">หนังจริงที่ใกล้เคียงที่สุด 5 เรื่อง</h2>
   <p class="topic__note" id="similar-note"></p>
   <div class="table-scroll">
     <table class="data-table">
@@ -175,7 +178,7 @@
 
 {# ---------------------------------------------------------------- History #}
 <section class="panel" aria-labelledby="history-title">
-  <h2 class="panel__title" id="history-title"><span aria-hidden="true">🗂️</span> เปรียบเทียบ 5 ครั้งล่าสุด</h2>
+  <h2 class="panel__title" id="history-title">เปรียบเทียบ 5 ครั้งล่าสุด</h2>
   <div class="table-scroll">
     <table class="data-table history-table">
       <caption class="sr-only">ผลการลองจำลองล่าสุดไม่เกิน 5 ครั้ง ครั้งล่าสุดอยู่บนสุด</caption>
@@ -205,7 +208,7 @@
 {% set sc = models.score %}
 <section class="panel" aria-labelledby="model-title">
   <details class="model-details">
-    <summary><h2 class="panel__title" id="model-title"><span aria-hidden="true">🧮</span> หลักการของโมเดล</h2></summary>
+    <summary><h2 class="panel__title" id="model-title">หลักการของโมเดล</h2></summary>
     <div class="model-grid">
       <div>
         <h3>โมเดลรายได้</h3>
@@ -245,8 +248,7 @@
       </table>
     </div>
     <p class="topic__note">
-      <span aria-hidden="true">ℹ️</span>
-      ใช้เฉพาะประเภทที่มีหนังอย่างน้อย 30 เรื่อง · คำนวณด้วย numpy (least squares) ไม่ใช้ scikit-learn ·
+            ใช้เฉพาะประเภทที่มีหนังอย่างน้อย 30 เรื่อง · คำนวณด้วย numpy (least squares) ไม่ใช้ scikit-learn ·
       โมเดลสร้างใหม่อัตโนมัติเมื่อไฟล์ Excel เปลี่ยน
     </p>
   </details>
@@ -256,7 +258,8 @@
 <div class="film-pass" id="film-pass" aria-hidden="true">
   <div class="filmstrip film-pass__strip">
     <div class="film-pass__frames">
-      {% for icon in ['🎬', '⭐', '🎞️', '🍿', '🎥', '💰', '🎟️', '🎬', '⭐', '🎞️', '🍿', '🎥'] %}
+      {# Countdown like a film leader #}
+      {% for icon in ['8', '7', '6', '5', '4', '3', '2', '1', 'ACTION', '8', '7', '6'] %}
       <span class="film-pass__frame">{{ icon }}</span>
       {% endfor %}
     </div>
@@ -264,7 +267,6 @@
 </div>
 {% else %}
 <div class="empty-state">
-  <p class="empty-state__icon" aria-hidden="true">🎞️</p>
   <p class="empty-state__title">ข้อมูลยังไม่พอสำหรับสร้างโมเดล</p>
   <p>ต้องมีอย่างน้อย 2 ประเภทหนังที่มีข้อมูลทุนสร้างและรายได้ประเภทละ 30 เรื่องขึ้นไป</p>
 </div>

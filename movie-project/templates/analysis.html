@@ -23,8 +23,7 @@
 
 {% macro genre_note(left_out) %}
   <p class="topic__note">
-    <span aria-hidden="true">ℹ️</span>
-    จัดอันดับเฉพาะประเภทที่มีข้อมูลอย่างน้อย {{ a.min_genre_count }} เรื่อง
+        จัดอันดับเฉพาะประเภทที่มีข้อมูลอย่างน้อย {{ a.min_genre_count }} เรื่อง
     {% if left_out %}(ไม่นับ: {{ left_out | join(', ') }}){% endif %}
   </p>
 {% endmacro %}
@@ -76,7 +75,7 @@
 </p>
 
 <aside class="notice-box" aria-labelledby="limits-heading">
-  <h2 class="notice-box__title" id="limits-heading"><span aria-hidden="true">⚠️</span> ข้อจำกัดของข้อมูล</h2>
+  <h2 class="notice-box__title" id="limits-heading">ข้อจำกัดของข้อมูล</h2>
   <ul class="notice-box__list">
     <li>
       หนัง <strong>{{ lim.missing_budget | number }}</strong> เรื่อง ไม่มีข้อมูลทุนสร้าง
@@ -97,6 +96,7 @@
 
 <nav class="toc" aria-label="สารบัญหน้าวิเคราะห์">
   <ul>
+    <li><a href="#toolpak">ผลจาก Excel ToolPak</a></li>
     <li><a href="#q1">1 · ทุนสร้างกับรายได้</a></li>
     <li><a href="#q2">2 · ประเภทหนัง</a></li>
     <li><a href="#q3">3 · แนวโน้มตามปี</a></li>
@@ -107,6 +107,223 @@
     <li><a href="#correlation">Correlation</a></li>
   </ul>
 </nav>
+
+{# ------------------------------------------------- Excel Analysis ToolPak #}
+{% macro tp_value(value, kind) -%}
+  {%- if value is none -%}—
+  {%- elif kind == 'money' -%}{{ '-' if value < 0 else '' }}${{ (value | abs) | number(0) }}
+  {%- elif kind == 'int' -%}{{ value | number(0) }}
+  {%- elif kind == 'dec2' -%}{{ value | number(2) }}
+  {%- else -%}{{ value | number(4) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# Raw ToolPak numbers: huge sums of squares in scientific notation, like Excel #}
+{% macro excel_num(value, header='') -%}
+  {%- if value is none -%}
+  {%- elif header in ('P-value', 'Significance F') -%}{{ '< 0.001' if value < 0.001 else '%.4f' % value }}
+  {%- elif (value | abs) >= 1e9 -%}{{ '%.4e' % value }}
+  {%- elif value == (value | round(0)) and (value | abs) < 1e9 -%}{{ value | number(0) }}
+  {%- else -%}{{ value | number(4) }}
+  {%- endif -%}
+{%- endmacro %}
+
+<section class="topic panel" id="toolpak" aria-labelledby="toolpak-title">
+  <header class="topic__head">
+    <span class="topic__num" aria-hidden="true">XL</span>
+    <div>
+      <p class="topic__kicker">Microsoft Excel · Analysis ToolPak</p>
+      <h2 class="topic__title" id="toolpak-title">ผลวิเคราะห์จาก Excel (Analysis ToolPak)</h2>
+    </div>
+  </header>
+
+  {% if toolpak.status == 'missing' %}
+  <div class="toolpak-empty">
+    <p>ยังไม่มีไฟล์ <code>data/analysis.xlsx</code> ส่วนนี้จะแสดงผลจาก Analysis ToolPak เมื่อวางไฟล์ไว้ในโฟลเดอร์ <code>data/</code></p>
+    <p class="footer-muted">ชื่อชีตที่เว็บอ่าน: <code>Descriptive…</code>, <code>Correlation</code>, <code>Regression</code>,
+      <code>Regression_Data</code> และ <code>movies</code> (ข้อมูลที่ใช้รัน ToolPak)</p>
+  </div>
+
+  {% elif toolpak.status == 'error' %}
+  <div class="sim-error" role="alert">{{ toolpak.error }}</div>
+
+  {% else %}
+  {% set fresh = toolpak.freshness %}
+  <p class="chart-about">
+    ผลในส่วนนี้มาจากไฟล์ <code>data/analysis.xlsx</code> ที่กลุ่มคำนวณด้วย <strong>Analysis ToolPak ของ Excel</strong>
+    (บันทึกล่าสุด {{ toolpak.modified.strftime('%d/%m/%Y %H:%M') }}) เว็บอ่านไฟล์นี้อย่างเดียว ไม่แก้ไข
+  </p>
+  <p class="source-line">
+    <span class="source-chip source-chip--excel">Excel</span>
+    ข้อมูลที่ใช้รัน ToolPak: {{ fresh.excel_movies | number }} เรื่อง
+    ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
+    {% if fresh.stale %}
+    <span class="source-line__warn">· ข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak ดูรายละเอียดในส่วนตรวจสอบด้วย Python ด้านล่าง</span>
+    {% endif %}
+  </p>
+
+  <div class="tp-full">
+    <h3 class="tp-full__title"><span class="source-chip source-chip--excel">Excel</span> ผล Analysis ToolPak ฉบับเต็ม (เหมือนในไฟล์ Excel)</h3>
+    {% set reg = toolpak.regression %}
+    {% if reg.stats %}
+    <h4 class="chart-title">Regression — SUMMARY OUTPUT</h4>
+    <div class="tp-grid tp-grid--regression">
+      <div class="table-scroll">
+        <table class="data-table">
+          <caption class="sr-only">Regression Statistics</caption>
+          <thead><tr><th scope="col" colspan="2">Regression Statistics</th></tr></thead>
+          <tbody>
+            {% for label, value in reg.stats.items() %}
+            <tr><th scope="row">{{ label }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <caption class="sr-only">ANOVA</caption>
+          <thead><tr><th scope="col">ANOVA</th>{% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for label, values in reg.anova.items() %}
+            <tr>
+              <th scope="row">{{ label }}</th>
+              {% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<td class="col-num">{{ excel_num(values.get(h), h) }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% set coef_headers = ['Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'] %}
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Coefficients</caption>
+        <thead><tr><th scope="col"></th>{% for h in coef_headers %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for c in reg.coefficients %}
+          <tr>
+            <th scope="row">{{ c.name }}</th>
+            {% for h in coef_headers %}<td class="col-num">{{ excel_num(c.get(h), h) }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="tp-grid">
+      {% for variable, stats in toolpak.descriptive.items() %}
+      <div class="table-scroll">
+        <h4 class="chart-title">Descriptive Statistics — {{ variable }}</h4>
+        <table class="data-table">
+          <tbody>
+            {% for label, value in stats.items() %}
+            <tr><th scope="row">{{ label }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endfor %}
+      {% if toolpak.correlation.pairs %}
+      <div class="table-scroll">
+        <h4 class="chart-title">Correlation</h4>
+        <table class="data-table">
+          <tbody>
+            {% for pair, value in toolpak.correlation.pairs.items() %}
+            <tr><th scope="row">{{ pair[0] }} กับ {{ pair[1] }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% if toolpak.interpretation %}
+  <p class="topic__answer"><strong>สรุปจากผล ToolPak:</strong> {{ toolpak.interpretation }}
+    (ค่า P-value และช่วงความเชื่อมั่นมาจาก ToolPak โดยตรง)</p>
+  {% endif %}
+
+
+  <div class="python-check" role="region" aria-labelledby="python-check-title">
+    <h3 class="python-check__title" id="python-check-title">
+      <span class="source-chip source-chip--python">Python</span>
+      ตรวจสอบด้วย Python (คำนวณในเว็บ ไม่ได้มาจาก Excel)
+    </h3>
+    <p class="chart-about">
+      ค่าในส่วนนี้<strong>คำนวณด้วยภาษา Python (pandas และ numpy) ในเว็บ ไม่ได้มาจากไฟล์ Excel</strong>
+      ใช้ตรวจผลของ ToolPak ด้านบน 2 เรื่อง: (1) คำนวณซ้ำจาก<strong>ข้อมูลชุดเดียวกับที่ Excel ใช้</strong> เพื่อยืนยันว่าตัวเลขถูกต้อง
+      และ (2) คำนวณจาก<strong>ข้อมูลปัจจุบันในเว็บ</strong> เพื่อดูว่าผลใน Excel ยังเป็นปัจจุบันหรือไม่
+    </p>
+
+    <div class="stat-row">
+      <div class="stat-tile">
+        <p class="stat-tile__label">Python คำนวณได้ตรงกับ ToolPak</p>
+        <p class="stat-tile__value">{{ toolpak.matches }}/{{ toolpak.total }}</p>
+      </div>
+      <div class="stat-tile">
+        <p class="stat-tile__label">ข้อมูลที่ Excel ใช้</p>
+        <p class="stat-tile__value">{{ fresh.excel_movies | number }}</p>
+      </div>
+      <div class="stat-tile">
+        <p class="stat-tile__label">ข้อมูลปัจจุบันในเว็บ</p>
+        <p class="stat-tile__value">{{ fresh.current_movies | number }}</p>
+      </div>
+    </div>
+
+    {% if fresh.stale %}
+    <div class="toolpak-status toolpak-status--stale" role="note">
+      <p><strong>ผลใน Excel ยังไม่ได้อัปเดตตามข้อมูลล่าสุด</strong></p>
+      <p>
+        Excel ใช้ข้อมูล {{ fresh.excel_movies | number }} เรื่อง ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
+        แต่ตอนนี้ <code>movies.xlsx</code> มี {{ fresh.current_movies | number }} เรื่อง ({{ fresh.current_financial | number }} เรื่อง)
+        ตัวเลขในคอลัมน์ "Python · ข้อมูลปัจจุบันในเว็บ" และหัวข้อ 1–6 ด้านล่างจึงต่างจาก Excel เล็กน้อย
+        ถ้าต้องการให้ตรงกัน ให้อัปเดตข้อมูลใน <code>analysis.xlsx</code> แล้วรัน Analysis ToolPak ใหม่
+      </p>
+    </div>
+    {% else %}
+    <div class="toolpak-status toolpak-status--fresh" role="note">
+      <p><strong>ผลใน Excel เป็นปัจจุบัน</strong> ข้อมูลใน <code>analysis.xlsx</code> มีจำนวนเท่ากับข้อมูลปัจจุบันในเว็บ</p>
+    </div>
+    {% endif %}
+
+    <div class="table-scroll">
+      <table class="data-table compare-table">
+        <caption class="sr-only">ตรวจผลจาก Excel Analysis ToolPak ด้วยค่าที่ Python คำนวณในเว็บ</caption>
+        <thead>
+          <tr>
+            <th scope="col">ตัวชี้วัด</th>
+            <th scope="col" class="col-num">Excel ToolPak</th>
+            <th scope="col" class="col-num col-python">Python · ข้อมูลชุดเดียวกับ Excel</th>
+            <th scope="col">ผลตรวจ</th>
+            <th scope="col" class="col-num col-python">Python · ข้อมูลปัจจุบันในเว็บ</th>
+          </tr>
+        </thead>
+        {% for group in toolpak.groups %}
+        <tbody>
+          <tr class="compare-table__group"><th scope="rowgroup" colspan="5">{{ group.title }}</th></tr>
+          {% for r in group.rows %}
+          <tr>
+            <th scope="row">{{ r.label }}</th>
+            <td class="col-num">{{ tp_value(r.excel, r.kind) }}</td>
+            <td class="col-num col-python">{{ tp_value(r.python, r.kind) }}</td>
+            <td>
+              {% if r.match %}<span class="match-badge match-badge--ok">✓ ตรงกัน</span>
+              {% else %}<span class="match-badge match-badge--bad">✗ ไม่ตรง</span>{% endif %}
+            </td>
+            <td class="col-num col-python">{{ tp_value(r.current, r.kind) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% endfor %}
+      </table>
+    </div>
+    <p class="topic__note">
+      ถือว่าตรงกันเมื่อต่างกันไม่เกิน 0.0001% (ความคลาดเคลื่อนจากการปัดเศษของคอมพิวเตอร์)
+      · ค่าที่เป็นเงินแสดงเป็นดอลลาร์เต็มจำนวน
+    </p>
+  </div>
+  {% endif %}
+</section>
 
 {# ------------------------------------------------------------------ Q1 #}
 {% set q1 = a.q1 %}
@@ -217,8 +434,7 @@
     </figure>
   </div>
   <p class="topic__note">
-    <span aria-hidden="true">ℹ️</span>
-    กราฟเงินใช้เฉพาะหนังที่มีทั้งทุนสร้างและรายได้ และแสดงเฉพาะปีที่มีหนังแบบนี้อย่างน้อย {{ a.min_year_financial }} เรื่อง
+        กราฟเงินใช้เฉพาะหนังที่มีทั้งทุนสร้างและรายได้ และแสดงเฉพาะปีที่มีหนังแบบนี้อย่างน้อย {{ a.min_year_financial }} เรื่อง
     {% if q3.money_left_out %}(ไม่แสดงปี {{ q3.money_left_out | join(', ') }}){% endif %}
     · แยกเป็น 2 กราฟเพราะจำนวนหนังกับจำนวนเงินมีหน่วยต่างกัน
   </p>
@@ -276,8 +492,7 @@
     </figure>
   </div>
   <p class="topic__note">
-    <span aria-hidden="true">ℹ️</span>
-    รายได้รวมนับจากทุกเรื่องที่มีข้อมูลรายได้ บริษัทหรือผู้กำกับที่มีผลงานจำนวนมากจึงมีโอกาสติดอันดับมากกว่า
+        รายได้รวมนับจากทุกเรื่องที่มีข้อมูลรายได้ บริษัทหรือผู้กำกับที่มีผลงานจำนวนมากจึงมีโอกาสติดอันดับมากกว่า
   </p>
   {% else %}
   <p class="chart-caption">{{ q4.caption }}</p>
@@ -386,8 +601,7 @@
     </table>
   </div>
   <p class="topic__note">
-    <span aria-hidden="true">ℹ️</span>
-    แต่ละตัวแปรคำนวณจากเรื่องที่มีค่านั้น (n ต่างกันได้) · SD เป็นค่าของกลุ่มตัวอย่าง (เหมือน STDEV.S ใน Excel)
+        แต่ละตัวแปรคำนวณจากเรื่องที่มีค่านั้น (n ต่างกันได้) · SD เป็นค่าของกลุ่มตัวอย่าง (เหมือน STDEV.S ใน Excel)
     · ฐานนิยมแสดง “—” เมื่อไม่มีค่าใดซ้ำกัน
   </p>
   {% if a.stats.caption %}<p class="topic__answer"><strong>ข้อสังเกต:</strong> {{ a.stats.caption }}</p>{% endif %}

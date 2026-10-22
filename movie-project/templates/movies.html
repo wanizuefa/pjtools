@@ -23,12 +23,12 @@
     <p class="marquee__sub">ข้อมูลทั้งหมดอ่านจากไฟล์ Excel (data/movies.xlsx)</p>
   </div>
   <a class="btn btn--gold btn--lg" href="{{ url_for('movie_new', next=next_url) }}">
-    <span aria-hidden="true">➕</span> เพิ่มหนังใหม่
+    เพิ่มหนังใหม่
   </a>
 </section>
 
 <section class="panel" aria-labelledby="filter-heading">
-  <h2 class="panel__title" id="filter-heading"><span aria-hidden="true">🔍</span> ค้นหาและกรองข้อมูล</h2>
+  <h2 class="panel__title" id="filter-heading">ค้นหาและกรองข้อมูล</h2>
   <form class="filter-form" method="get" action="{{ url_for('movies') }}" role="search">
     <div class="field field--wide">
       <label for="q">ค้นหา</label>
@@ -85,7 +85,7 @@
     </div>
 
     <div class="filter-form__actions">
-      <button class="btn btn--gold" type="submit"><span aria-hidden="true">🔍</span> ค้นหา</button>
+      <button class="btn btn--gold" type="submit">ค้นหา</button>
       {% if has_filters %}
       <a class="btn btn--ghost" href="{{ url_for('movies') }}">ล้างตัวกรอง</a>
       {% endif %}
@@ -212,7 +212,6 @@
 
   {% else %}
   <div class="empty-state">
-    <p class="empty-state__icon" aria-hidden="true">🍿</p>
     <p class="empty-state__title">ไม่พบหนังที่ตรงกับเงื่อนไข</p>
     <p>ลองเปลี่ยนคำค้นหาหรือช่วงปี แล้วค้นหาอีกครั้ง</p>
     <a class="btn btn--ghost" href="{{ url_for('movies') }}">ดูหนังทั้งหมด</a>
