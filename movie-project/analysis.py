@@ -1,11 +1,13 @@
 """Statistics for CineScope.
 
-Every function takes the movie DataFrame from data_service.load_movies()
-and returns plain Python values (numbers, lists, dicts) that the templates
-and Chart.js can use directly. Nothing here reads or writes files.
+- Analysis page: shows the results the group computed with Excel's Analysis
+  ToolPak (read from data/analysis.xlsx by data_service). toolpak_report()
+  only arranges those Excel numbers and writes short captions from them.
+- Home page, Dashboard and Box Office Simulator: small calculations on the
+  current movie data (key findings, highlights, regression models with numpy).
 
-Captions are generated from the computed numbers, so the text on the page
-always matches the current Excel data.
+Every function returns plain Python values (numbers, lists, dicts) that the
+templates can use directly. Nothing here reads or writes files.
 """
 
 import math
@@ -15,22 +17,8 @@ import numpy as np
 import pandas as pd
 
 MIN_GENRE_COUNT = 30        # genres with fewer movies are not ranked
-MIN_YEAR_FINANCIAL = 10     # years with fewer budget+gross movies are left out of money trends
+MIN_YEAR_FINANCIAL = 10     # years with fewer budget+gross movies count as poorly covered
 TOP_N = 10
-
-STAT_COLUMNS = {
-    "score": "คะแนน IMDb",
-    "budget": "ทุนสร้าง (USD)",
-    "gross": "รายได้ (USD)",
-    "runtime": "ความยาว (นาที)",
-}
-CORR_COLUMNS = {
-    "score": "คะแนน",
-    "votes": "จำนวนโหวต",
-    "budget": "ทุนสร้าง",
-    "gross": "รายได้",
-    "runtime": "ความยาว",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -67,25 +55,6 @@ def pearson_r(x, y):
     return float(np.corrcoef(pair["x"], pair["y"])[0, 1]), len(pair)
 
 
-def linear_regression(x, y):
-    """Simple least-squares line y = slope * x + intercept, with R²."""
-    pair = pd.DataFrame({"x": x, "y": y}).dropna()
-    if len(pair) < 3 or pair["x"].std() == 0:
-        return None
-    slope, intercept = np.polyfit(pair["x"], pair["y"], 1)
-    predicted = slope * pair["x"] + intercept
-    ss_res = float(((pair["y"] - predicted) ** 2).sum())
-    ss_tot = float(((pair["y"] - pair["y"].mean()) ** 2).sum())
-    return {
-        "slope": float(slope),
-        "intercept": float(intercept),
-        "r2": 1 - ss_res / ss_tot if ss_tot else 0.0,
-        "n": len(pair),
-        "x_min": float(pair["x"].min()),
-        "x_max": float(pair["x"].max()),
-    }
-
-
 def strength_word(r):
     """Thai description of correlation strength."""
     size = abs(r)
@@ -119,218 +88,6 @@ def genre_metric(df, column, how, min_count=MIN_GENRE_COUNT):
     return rows, left_out
 
 
-def chart_series(rows):
-    """Split [{label, value, count}] into parallel lists for Chart.js."""
-    return {
-        "labels": [row["label"] for row in rows],
-        "values": [row["value"] for row in rows],
-        "counts": [row["count"] for row in rows],
-    }
-
-
-# ---------------------------------------------------------------------------
-# Descriptive statistics and correlation
-# ---------------------------------------------------------------------------
-
-def descriptive_stats(df):
-    """Mean, median, mode, SD (sample), min and max for the key columns."""
-    rows = []
-    for column, label in STAT_COLUMNS.items():
-        values = df[column].dropna()
-        counts = values.value_counts()
-        has_mode = len(counts) > 0 and counts.iloc[0] > 1
-        rows.append({
-            "column": column,
-            "label": label,
-            "n": int(len(values)),
-            "mean": float(values.mean()) if len(values) else None,
-            "median": float(values.median()) if len(values) else None,
-            "mode": float(counts.index[0]) if has_mode else None,
-            "mode_count": int(counts.iloc[0]) if has_mode else 0,
-            "sd": float(values.std()) if len(values) > 1 else None,  # ddof=1, same as Excel STDEV.S
-            "min": float(values.min()) if len(values) else None,
-            "max": float(values.max()) if len(values) else None,
-        })
-
-    gross = next(row for row in rows if row["column"] == "gross")
-    caption = ""
-    if gross["mean"] and gross["median"]:
-        ratio = gross["mean"] / gross["median"]
-        if ratio > 1.3:
-            caption = (
-                f"รายได้เฉลี่ย ({format_money(gross['mean'])}) สูงกว่ามัธยฐาน "
-                f"({format_money(gross['median'])}) ถึง {ratio:.1f} เท่า แสดงว่าข้อมูลเบ้ขวา "
-                "มีหนังทำเงินมหาศาลไม่กี่เรื่องดึงค่าเฉลี่ยขึ้น จึงควรใช้มัธยฐานเมื่อเปรียบเทียบรายได้ระหว่างกลุ่ม"
-            )
-        else:
-            caption = (
-                f"รายได้เฉลี่ย ({format_money(gross['mean'])}) ใกล้เคียงกับมัธยฐาน "
-                f"({format_money(gross['median'])}) การกระจายของรายได้จึงค่อนข้างสมมาตร"
-            )
-    return {"rows": rows, "caption": caption}
-
-
-def correlation_matrix(df):
-    """Pearson correlation between the key numeric columns (pairwise complete rows)."""
-    columns = list(CORR_COLUMNS)
-    matrix = df[columns].corr(method="pearson")
-    cells = [[None if pd.isna(v) else float(v) for v in matrix.loc[col, columns]] for col in columns]
-
-    pairs = []
-    for i, a in enumerate(columns):
-        for j in range(i + 1, len(columns)):
-            if cells[i][j] is not None:
-                pairs.append((cells[i][j], a, columns[j]))
-    caption = ""
-    if pairs:
-        strongest = max(pairs, key=lambda p: abs(p[0]))
-        weakest = min(pairs, key=lambda p: abs(p[0]))
-        caption = (
-            f"คู่ที่สัมพันธ์กันมากที่สุดคือ {CORR_COLUMNS[strongest[1]]} กับ {CORR_COLUMNS[strongest[2]]} "
-            f"(r = {strongest[0]:.2f}) ส่วนคู่ที่สัมพันธ์กันน้อยที่สุดคือ "
-            f"{CORR_COLUMNS[weakest[1]]} กับ {CORR_COLUMNS[weakest[2]]} (r = {weakest[0]:.2f})"
-        )
-    return {
-        "columns": columns,
-        "labels": [CORR_COLUMNS[c] for c in columns],
-        "cells": cells,
-        "caption": caption,
-    }
-
-
-# ---------------------------------------------------------------------------
-# The six research questions
-# ---------------------------------------------------------------------------
-
-def budget_vs_gross(df):
-    """Q1: How much does budget drive gross? (scatter + regression line)"""
-    fin = financial_rows(df)
-    reg = linear_regression(fin["budget"], fin["gross"])
-    r, n = pearson_r(fin["budget"], fin["gross"])
-    if reg is None or r is None:
-        return {"ok": False, "caption": "ข้อมูลที่มีทั้งทุนสร้างและรายได้ยังไม่พอสำหรับคำนวณ regression"}
-
-    sign = "+" if reg["intercept"] >= 0 else "−"
-    equation = f"รายได้ = {reg['slope']:.2f} × ทุนสร้าง {sign} {format_money(abs(reg['intercept']))}"
-    caption = (
-        f"ทุนสร้างกับรายได้{strength_word(r)} (r = {r:.2f}) "
-        f"ทุนสร้างที่เพิ่มขึ้น $1 สัมพันธ์กับรายได้ที่เพิ่มขึ้นประมาณ ${reg['slope']:.2f} โดยเฉลี่ย "
-        f"และ R² = {reg['r2']:.2f} แปลว่าทุนสร้างอธิบายความแตกต่างของรายได้ได้ประมาณ "
-        f"{reg['r2'] * 100:.0f}% ส่วนที่เหลือมาจากปัจจัยอื่น เช่น ประเภทหนัง นักแสดง หรือการตลาด "
-        f"(คำนวณจาก {n:,} เรื่องที่มีทั้งทุนสร้างและรายได้)"
-    )
-    points = [
-        [float(b), float(g), name, int(year)]
-        for b, g, name, year in fin[["budget", "gross", "name", "year"]].itertuples(index=False)
-    ]
-    line = [
-        [reg["x_min"], reg["slope"] * reg["x_min"] + reg["intercept"]],
-        [reg["x_max"], reg["slope"] * reg["x_max"] + reg["intercept"]],
-    ]
-    return {
-        "ok": True,
-        "r": r,
-        "slope": reg["slope"],
-        "intercept": reg["intercept"],
-        "r2": reg["r2"],
-        "n": n,
-        "equation": equation,
-        "caption": caption,
-        "chart": {"points": points, "line": line},
-    }
-
-
-def genre_performance(df):
-    """Q2: Which genres earn the most (median gross) and score the best (mean score)?"""
-    gross_rows, gross_left_out = genre_metric(df, "gross", "median")
-    score_rows, score_left_out = genre_metric(df, "score", "mean")
-    if not gross_rows or not score_rows:
-        return {"ok": False, "caption": f"ยังไม่มีประเภทหนังที่มีข้อมูลอย่างน้อย {MIN_GENRE_COUNT} เรื่อง"}
-
-    top_gross, top_score, low_score = gross_rows[0], score_rows[0], score_rows[-1]
-    gross_caption = (
-        f"{top_gross['label']} มีรายได้มัธยฐานสูงสุด ({format_money(top_gross['value'])} จาก "
-        f"{top_gross['count']:,} เรื่อง)"
-    )
-    if len(gross_rows) > 1:
-        second = gross_rows[1]
-        gross_caption += f" ตามด้วย {second['label']} ({format_money(second['value'])})"
-    gross_caption += f" ส่วนต่ำสุดคือ {gross_rows[-1]['label']} ({format_money(gross_rows[-1]['value'])})"
-
-    score_caption = (
-        f"{top_score['label']} ได้คะแนนเฉลี่ยสูงสุด ({top_score['value']:.2f}) "
-        f"ส่วน {low_score['label']} ได้คะแนนเฉลี่ยต่ำสุด ({low_score['value']:.2f})"
-    )
-    if top_gross["label"] == top_score["label"]:
-        summary = f"{top_gross['label']} เป็นประเภทที่โดดเด่นทั้งด้านรายได้และคะแนน"
-    else:
-        summary = (
-            f"ประเภทที่ทำเงินได้มากที่สุด ({top_gross['label']}) ไม่ใช่ประเภทที่ผู้ชมให้คะแนนสูงที่สุด "
-            f"({top_score['label']}) แสดงว่าความสำเร็จด้านรายได้กับด้านคะแนนไม่ได้ไปด้วยกันเสมอ"
-        )
-    return {
-        "ok": True,
-        "gross": chart_series(gross_rows),
-        "score": chart_series(score_rows),
-        "gross_caption": gross_caption,
-        "score_caption": score_caption,
-        "caption": summary,
-        "left_out": sorted(set(gross_left_out) | set(score_left_out)),
-    }
-
-
-def yearly_trends(df):
-    """Q3: Number of movies, average budget and average gross per year."""
-    counts = df.groupby("year").size()
-    fin = financial_rows(df)
-    money = fin.groupby("year").agg(budget=("budget", "mean"), gross=("gross", "mean"),
-                                    n=("budget", "size"))
-    money_kept = money[money["n"] >= MIN_YEAR_FINANCIAL]
-    money_left_out = [int(y) for y in money.index[money["n"] < MIN_YEAR_FINANCIAL]]
-    if counts.empty or money_kept.empty:
-        return {"ok": False, "caption": "ข้อมูลรายปียังไม่พอสำหรับแสดงแนวโน้ม"}
-
-    peak_year = int(counts.idxmax())
-    first_year = int(money_kept.index.min())
-    budget_peak_year = int(money_kept["budget"].idxmax())
-    gross_peak_year = int(money_kept["gross"].idxmax())
-
-    peak_years = counts.index[counts == counts.max()]
-    if len(peak_years) >= 3:
-        # The dataset keeps a fixed number of popular movies per year.
-        count_caption = (
-            f"{len(peak_years)} จาก {len(counts)} ปีมีหนังเท่ากันพอดีที่ {int(counts.max()):,} เรื่อง "
-            f"(ช่วงปี {int(peak_years.min())}–{int(peak_years.max())}) แสดงว่าชุดข้อมูลเก็บหนังยอดนิยมเป็นโควตาต่อปี "
-            "จำนวนหนังในกราฟนี้จึงไม่ได้สะท้อนขนาดของอุตสาหกรรมภาพยนตร์จริง "
-            f"ส่วนปีที่มีน้อยที่สุดคือ {int(counts.idxmin())} ({int(counts.min()):,} เรื่อง)"
-        )
-    else:
-        count_caption = (
-            f"ข้อมูลมีหนังมากที่สุดในปี {peak_year} ({int(counts.max()):,} เรื่อง) "
-            f"และน้อยที่สุดในปี {int(counts.idxmin())} ({int(counts.min()):,} เรื่อง)"
-        )
-    money_caption = (
-        f"ทุนสร้างเฉลี่ยเปลี่ยนจาก {format_money(money_kept.loc[first_year, 'budget'])} ในปี {first_year} "
-        f"ไปสูงสุดที่ {format_money(money_kept['budget'].max())} ในปี {budget_peak_year} "
-        f"ส่วนรายได้เฉลี่ยสูงสุดอยู่ที่ปี {gross_peak_year} ({format_money(money_kept['gross'].max())})"
-    )
-    if (money_kept["gross"] > money_kept["budget"]).all():
-        money_caption += " และรายได้เฉลี่ยสูงกว่าทุนสร้างเฉลี่ยในทุกปีที่แสดง"
-    return {
-        "ok": True,
-        "count_chart": {"labels": [int(y) for y in counts.index], "values": [int(v) for v in counts.values]},
-        "money_chart": {
-            "labels": [int(y) for y in money_kept.index],
-            "budget": [float(v) for v in money_kept["budget"]],
-            "gross": [float(v) for v in money_kept["gross"]],
-            "counts": [int(v) for v in money_kept["n"]],
-        },
-        "count_caption": count_caption,
-        "money_caption": money_caption,
-        "money_left_out": money_left_out,
-    }
-
-
 def top_by_total_gross(df, column, n=TOP_N):
     data = df[[column, "gross"]].dropna()
     grouped = data.groupby(column)["gross"].agg(["sum", "count"]).sort_values("sum", ascending=False)
@@ -341,6 +98,7 @@ def top_by_total_gross(df, column, n=TOP_N):
     ], float(data["gross"].sum())
 
 
+<<<<<<< HEAD
 def top_earners(df):
     """Q4: Companies and directors with the highest total gross."""
     companies, total_gross = top_by_total_gross(df, "company")
@@ -434,23 +192,11 @@ def roi_by_genre(df):
     return {"ok": True, "chart": chart_series(rows), "caption": caption, "left_out": left_out}
 
 
+=======
+>>>>>>> 118dbdc91cb76da493f09fd4c25e3e78735d2538
 # ---------------------------------------------------------------------------
-# Data quality and page assembly
+# Home page and Dashboard (computed from the current movie data)
 # ---------------------------------------------------------------------------
-
-def data_limitations(df):
-    total = len(df)
-    fin = len(financial_rows(df))
-    return {
-        "total": total,
-        "missing_budget": int(df["budget"].isna().sum()),
-        "missing_gross": int(df["gross"].isna().sum()),
-        "financial_rows": fin,
-        "financial_share": fin / total * 100 if total else 0,
-        "year_min": int(df["year"].min()) if total else None,
-        "year_max": int(df["year"].max()) if total else None,
-    }
-
 
 def key_findings(df):
     """Three headline findings for the home page, computed from the current data."""
@@ -697,13 +443,11 @@ def simulate(models, df, genre, budget, runtime, year, rating=""):
 
 
 # ---------------------------------------------------------------------------
-# Comparison with Excel's Analysis ToolPak (results read by data_service)
+# Analysis page: results from Excel's Analysis ToolPak
 # ---------------------------------------------------------------------------
-# Two separate checks:
-#   1. Accuracy  - Python recomputes each statistic from the SAME data that is
-#                  inside analysis.xlsx, so it must equal the ToolPak value.
-#   2. Freshness - the data inside analysis.xlsx is compared with the current
-#                  movies.xlsx; if the web has new rows, Excel needs a re-run.
+# Only arranges the numbers read from data/analysis.xlsx and writes captions
+# from them. The single check against the current data is how many movies the
+# Excel file used, so the page can say when the ToolPak needs to be re-run.
 
 DESCRIPTIVE_LABELS = {
     "Mean": "ค่าเฉลี่ย (Mean)",
@@ -720,164 +464,84 @@ DESCRIPTIVE_LABELS = {
     "Sum": "ผลรวม (Sum)",
     "Count": "จำนวน (Count)",
 }
-MONEY_COLUMNS = {"budget", "gross"}
-
-
-def find_column(frame, name):
-    """Column of `frame` whose name matches `name` ignoring case, or None."""
-    for column in frame.columns:
-        if str(column).strip().lower() == str(name).strip().lower():
-            return column
-    return None
-
-
-def numeric(frame, name):
-    column = find_column(frame, name)
-    return pd.to_numeric(frame[column], errors="coerce") if column is not None else None
-
-
-def values_match(a, b, tolerance=1e-6):
-    """Equal within a relative tolerance (floating-point rounding)."""
-    if a is None or b is None:
-        return False
-    return abs(a - b) <= tolerance * max(abs(a), abs(b), 1e-12)
-
-
-def describe_like_toolpak(values):
-    """The 13 statistics of ToolPak's Descriptive Statistics (Excel definitions)."""
-    values = values.dropna()
-    if values.empty:
-        return {}
-    counts = values.value_counts(sort=False)  # first-appearance order, like Excel MODE
-    mode = float(counts.idxmax()) if counts.max() > 1 else None
-    sd = float(values.std())
-    return {
-        "Mean": float(values.mean()),
-        "Standard Error": sd / math.sqrt(len(values)),
-        "Median": float(values.median()),
-        "Mode": mode,
-        "Standard Deviation": sd,
-        "Sample Variance": float(values.var()),
-        "Kurtosis": float(values.kurt()),   # same formula as Excel KURT
-        "Skewness": float(values.skew()),   # same formula as Excel SKEW
-        "Range": float(values.max() - values.min()),
-        "Minimum": float(values.min()),
-        "Maximum": float(values.max()),
-        "Sum": float(values.sum()),
-        "Count": float(len(values)),
-    }
-
-
-def regression_like_toolpak(x, y):
-    """Simple regression statistics in the same form as ToolPak's SUMMARY OUTPUT."""
-    reg = linear_regression(x, y)
-    if reg is None:
-        return {}
-    pair = pd.DataFrame({"x": x, "y": y}).dropna()
-    n = len(pair)
-    residuals = pair["y"] - (reg["slope"] * pair["x"] + reg["intercept"])
-    ss_res = float((residuals ** 2).sum())
-    ss_reg = float(((reg["slope"] * pair["x"] + reg["intercept"] - pair["y"].mean()) ** 2).sum())
-    return {
-        "Coefficient": reg["slope"],
-        "Intercept": reg["intercept"],
-        "Multiple R": math.sqrt(max(reg["r2"], 0.0)),
-        "R Square": reg["r2"],
-        "Adjusted R Square": 1 - (1 - reg["r2"]) * (n - 1) / (n - 2),
-        "Standard Error": math.sqrt(ss_res / (n - 2)),
-        "Observations": float(n),
-        "F": ss_reg / (ss_res / (n - 2)) if ss_res else None,
-    }
 
 
 def format_p_value(p):
     return "< 0.001" if p < 0.001 else f"{p:.3f}"
 
 
-def toolpak_comparison(df, toolpak):
-    """Compare ToolPak results with Python (same data) and with the current web data."""
+def describe_skew(skewness):
+    if skewness <= -0.5:
+        return "ข้อมูลเบ้ซ้าย (ค่าส่วนใหญ่อยู่สูงกว่าค่าเฉลี่ย มีค่าต่ำผิดปกติบางส่วนดึงค่าเฉลี่ยลง)"
+    if skewness >= 0.5:
+        return "ข้อมูลเบ้ขวา (ค่าส่วนใหญ่อยู่ต่ำกว่าค่าเฉลี่ย มีค่าสูงผิดปกติบางส่วนดึงค่าเฉลี่ยขึ้น)"
+    return "ข้อมูลค่อนข้างสมมาตร"
+
+
+def toolpak_report(df, toolpak):
+    """Everything the analysis page shows, taken from the ToolPak results."""
     if toolpak is None:
         return {"status": "missing"}
     if "error" in toolpak:
         return {"status": "error", "error": toolpak["error"]}
 
-    excel_data, reg_data = toolpak["data"], toolpak["regression_data"]
-    groups = []
-
-    def row(label, excel, python, current, kind):
-        return {"label": label, "excel": excel, "python": python, "current": current,
-                "kind": kind, "match": values_match(excel, python)}
-
-    # Regression (one X variable)
+    # Regression
     reg = toolpak["regression"]
     x_coef = next((c for c in reg["coefficients"] if c["name"].lower() != "intercept"), None)
     intercept = next((c for c in reg["coefficients"] if c["name"].lower() == "intercept"), None)
-    interpretation = ""
-    if x_coef and intercept and not reg_data.empty:
+    reg_data = toolpak["regression_data"]
+    regression_caption = ""
+    if x_coef and intercept:
         x_name = x_coef["name"]
-        y_column = next((c for c in reg_data.columns if str(c).lower() != x_name.lower()), None)
-        y_name = str(y_column)
-        python = regression_like_toolpak(numeric(reg_data, x_name), numeric(reg_data, y_name))
-        fin = financial_rows(df)
-        current = (regression_like_toolpak(fin[x_name.lower()], fin[y_name.lower()])
-                   if x_name.lower() in fin and y_name.lower() in fin else {})
-        money = "money" if y_name.lower() in MONEY_COLUMNS else "dec4"
-        excel_f = reg["anova"].get("Regression", {}).get("F")
-        groups.append({
-            "title": f"Regression: {x_name} → {y_name}",
-            "rows": [
-                row("ความชัน (Coefficient ของ " + x_name + ")", x_coef.get("Coefficients"),
-                    python.get("Coefficient"), current.get("Coefficient"), "dec4"),
-                row("จุดตัดแกน (Intercept)", intercept.get("Coefficients"),
-                    python.get("Intercept"), current.get("Intercept"), money),
-                row("Multiple R", reg["stats"].get("Multiple R"), python.get("Multiple R"), current.get("Multiple R"), "dec4"),
-                row("R Square", reg["stats"].get("R Square"), python.get("R Square"), current.get("R Square"), "dec4"),
-                row("Adjusted R Square", reg["stats"].get("Adjusted R Square"),
-                    python.get("Adjusted R Square"), current.get("Adjusted R Square"), "dec4"),
-                row("Standard Error", reg["stats"].get("Standard Error"),
-                    python.get("Standard Error"), current.get("Standard Error"), money),
-                row("F", excel_f, python.get("F"), current.get("F"), "dec2"),
-                row("Observations", reg["stats"].get("Observations"),
-                    python.get("Observations"), current.get("Observations"), "int"),
-            ],
-        })
+        y_name = next((str(c) for c in reg_data.columns if str(c).lower() != x_name.lower()), "Y")
+        slope, b0 = x_coef["Coefficients"], intercept["Coefficients"]
+        b0_text = format_money(abs(b0)) if y_name.lower() in ("gross", "budget") else f"{abs(b0):,.2f}"
+        sign = "−" if b0 < 0 else "+"
+        r2 = reg["stats"].get("R Square")
+        regression_caption = (
+            f"สมการที่ได้คือ {y_name} = {slope:.2f} × {x_name} {sign} {b0_text} "
+            f"แปลว่า {x_name} ที่เพิ่มขึ้น 1 หน่วย สัมพันธ์กับ {y_name} ที่เพิ่มขึ้นประมาณ {slope:.2f} หน่วยโดยเฉลี่ย"
+        )
+        if r2 is not None:
+            regression_caption += (
+                f" และ R Square = {r2:.4f} แปลว่า {x_name} อธิบายความแตกต่างของ {y_name} ได้ประมาณ {r2 * 100:.0f}%"
+            )
         p = x_coef.get("P-value")
         if p is not None:
-            significant = p < 0.05
-            interpretation = (
-                f"ความชันของ {x_name} = {x_coef['Coefficients']:.2f} "
-                f"(ช่วงความเชื่อมั่น 95%: {x_coef.get('Lower 95%', float('nan')):.2f} ถึง "
-                f"{x_coef.get('Upper 95%', float('nan')):.2f}) และ P-value {format_p_value(p)} "
+            regression_caption += (
+                f" ช่วงความเชื่อมั่น 95% ของความชันคือ {x_coef.get('Lower 95%', float('nan')):.2f} ถึง "
+                f"{x_coef.get('Upper 95%', float('nan')):.2f} และ P-value {format_p_value(p)} "
                 + ("ซึ่งน้อยกว่า 0.05 จึงสรุปได้ว่าความสัมพันธ์นี้มีนัยสำคัญทางสถิติ"
-                   if significant else "ซึ่งไม่น้อยกว่า 0.05 จึงยังสรุปไม่ได้ว่ามีความสัมพันธ์อย่างมีนัยสำคัญ")
+                   if p < 0.05 else "ซึ่งไม่น้อยกว่า 0.05 จึงยังสรุปไม่ได้ว่ามีความสัมพันธ์อย่างมีนัยสำคัญ")
             )
 
-    # Correlation pairs
-    corr_rows = []
-    for (a, b), excel_r in toolpak["correlation"]["pairs"].items():
-        source = reg_data if find_column(reg_data, a) is not None and find_column(reg_data, b) is not None else excel_data
-        python_r, _ = pearson_r(numeric(source, a), numeric(source, b)) if not source.empty else (None, 0)
-        current_r = (pearson_r(df[a.lower()], df[b.lower()])[0]
-                     if a.lower() in df and b.lower() in df else None)
-        corr_rows.append(row(f"r ({a} กับ {b})", excel_r, python_r, current_r, "dec4"))
-    if corr_rows:
-        groups.append({"title": "Correlation", "rows": corr_rows})
-
-    # Descriptive statistics, one group per variable
+    # Descriptive Statistics (one block per variable)
+    descriptive = []
     for variable, stats in toolpak["descriptive"].items():
-        python = describe_like_toolpak(numeric(excel_data, variable)) if numeric(excel_data, variable) is not None else {}
-        current = describe_like_toolpak(df[variable.lower()]) if variable.lower() in df else {}
-        is_money = variable.lower() in MONEY_COLUMNS
-        rows = []
-        for label, excel_value in stats.items():
-            kind = "int" if label == "Count" else ("money" if is_money and label not in
-                                                   ("Kurtosis", "Skewness") else "dec4")
-            rows.append(row(DESCRIPTIVE_LABELS.get(label, label), excel_value,
-                            python.get(label), current.get(label), kind))
-        groups.append({"title": f"Descriptive Statistics: {variable}", "rows": rows})
+        is_money = variable.lower() in ("budget", "gross")
+        show = format_money if is_money else (lambda v: f"{v:,.2f}")
+        caption = ""
+        if {"Mean", "Median", "Standard Deviation", "Count"} <= stats.keys():
+            caption = (
+                f"{variable} มีค่าเฉลี่ย {show(stats['Mean'])} มัธยฐาน {show(stats['Median'])} "
+                f"และส่วนเบี่ยงเบนมาตรฐาน {show(stats['Standard Deviation'])} จาก {stats['Count']:,.0f} เรื่อง"
+            )
+            if "Skewness" in stats:
+                caption += f" ความเบ้ {stats['Skewness']:.2f} แสดงว่า{describe_skew(stats['Skewness'])}"
+        descriptive.append({
+            "variable": variable,
+            "rows": [{"label": label, "thai": DESCRIPTIVE_LABELS.get(label, ""), "value": value}
+                     for label, value in stats.items()],
+            "caption": caption,
+        })
 
-    all_rows = [r for g in groups for r in g["rows"]]
-    excel_movies = len(excel_data) if not excel_data.empty else None
+    # Correlation (each pair once)
+    correlation = [
+        {"a": a, "b": b, "r": r, "caption": f"{a} กับ {b} {strength_word(r)} (r = {r:.4f})"}
+        for (a, b), r in toolpak["correlation"]["pairs"].items()
+    ]
+
+    excel_movies = len(toolpak["data"]) if not toolpak["data"].empty else None
     excel_financial = reg["stats"].get("Observations")
     current_financial = len(financial_rows(df))
     stale = ((excel_movies is not None and excel_movies != len(df))
@@ -885,13 +549,10 @@ def toolpak_comparison(df, toolpak):
     return {
         "status": "ok",
         "modified": toolpak["modified"],
-        "groups": groups,
-        "matches": sum(r["match"] for r in all_rows),
-        "total": len(all_rows),
         "regression": reg,
-        "descriptive": toolpak["descriptive"],
-        "correlation": toolpak["correlation"],
-        "interpretation": interpretation,
+        "regression_caption": regression_caption,
+        "descriptive": descriptive,
+        "correlation": correlation,
         "freshness": {
             "stale": stale,
             "excel_movies": excel_movies,
@@ -899,21 +560,4 @@ def toolpak_comparison(df, toolpak):
             "excel_financial": int(excel_financial) if excel_financial is not None else None,
             "current_financial": current_financial,
         },
-    }
-
-
-def run_analysis(df):
-    """Everything the analysis page needs, recomputed from the current data."""
-    return {
-        "limitations": data_limitations(df),
-        "stats": descriptive_stats(df),
-        "correlation": correlation_matrix(df),
-        "q1": budget_vs_gross(df),
-        "q2": genre_performance(df),
-        "q3": yearly_trends(df),
-        "q4": top_earners(df),
-        "q5": runtime_vs_score(df),
-        "q6": roi_by_genre(df),
-        "min_genre_count": MIN_GENRE_COUNT,
-        "min_year_financial": MIN_YEAR_FINANCIAL,
     }

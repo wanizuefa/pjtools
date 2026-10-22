@@ -141,7 +141,8 @@
           </td>
           <td data-label="เรท">{% if movie.rating %}<span class="rating-chip">{{ movie.rating }}</span>{% else %}—{% endif %}</td>
           <td class="col-num" data-label="คะแนน">
-            {% if movie.score is not none %}<span aria-hidden="true">⭐</span> {{ movie.score | number(1) }}{% else %}—{% endif %}
+            {# star + number in one element so they stay together in the mobile card layout #}
+            {% if movie.score is not none %}<span class="score-value"><span aria-hidden="true">⭐</span> {{ movie.score | number(1) }}</span>{% else %}—{% endif %}
           </td>
           <td class="col-num" data-label="ทุนสร้าง">{{ movie.budget | money }}</td>
           <td class="col-num" data-label="รายได้">{{ movie.gross | money }}</td>

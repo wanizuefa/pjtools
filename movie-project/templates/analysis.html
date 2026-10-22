@@ -2,687 +2,203 @@
 
 {% block title %}วิเคราะห์ข้อมูล{% endblock %}
 
-{# Format one descriptive-statistics value for its column #}
-{% macro stat_value(column, value) -%}
-  {%- if value is none -%}—
-  {%- elif column in ('budget', 'gross') -%}{{ value | money }}
-  {%- elif column == 'score' -%}{{ value | number(2) }}
-  {%- else -%}{{ value | number(1) }}
-  {%- endif -%}
-{%- endmacro %}
+{#
+  Everything on this page comes from data/analysis.xlsx, computed by the group
+  with Excel's Analysis ToolPak. The web only reads and displays those numbers.
+#}
 
-{% macro topic_head(number, question, title_id) %}
-  <header class="topic__head">
-    <span class="topic__num" aria-hidden="true">{{ '%02d' % number }}</span>
-    <div>
-      <p class="topic__kicker">คำถามวิจัยข้อ {{ number }}</p>
-      <h2 class="topic__title" id="{{ title_id }}">{{ question }}</h2>
-    </div>
-  </header>
-{% endmacro %}
-
-{% macro genre_note(left_out) %}
-  <p class="topic__note">
-        จัดอันดับเฉพาะประเภทที่มีข้อมูลอย่างน้อย {{ a.min_genre_count }} เรื่อง
-    {% if left_out %}(ไม่นับ: {{ left_out | join(', ') }}){% endif %}
-  </p>
-{% endmacro %}
-
-{% macro ranked_table(series, value_label, kind) %}
-  <details class="table-view">
-    <summary>ดูข้อมูลเป็นตาราง</summary>
-    <div class="table-scroll">
-      <table class="data-table">
-        <thead>
-          <tr><th scope="col">อันดับ</th><th scope="col">ชื่อ</th><th scope="col" class="col-num">{{ value_label }}</th><th scope="col" class="col-num">จำนวนเรื่อง</th></tr>
-        </thead>
-        <tbody>
-          {% for label in series.labels %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <th scope="row">{{ label }}</th>
-            <td class="col-num">
-              {%- if kind == 'money' %}{{ series['values'][loop.index0] | money }}
-              {%- elif kind == 'roi' %}{{ series['values'][loop.index0] | number(2) }} เท่า
-              {%- else %}{{ series['values'][loop.index0] | number(2) }}{% endif -%}
-            </td>
-            <td class="col-num">{{ series.counts[loop.index0] | number }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
-{% endmacro %}
-
-{% block content %}
-{% set lim = a.limitations %}
-
-<section class="page-head">
-  <div class="marquee marquee--compact" data-marquee>
-    <p class="marquee__kicker">BOX OFFICE REPORT</p>
-    <h1 class="marquee__title">วิเคราะห์ข้อมูล</h1>
-    <p class="marquee__sub">
-      ปัจจัยที่ส่งผลต่อความสำเร็จของภาพยนตร์ · {{ lim.total | number }} เรื่อง · ปี {{ lim.year_min }}–{{ lim.year_max }}
-    </p>
-  </div>
-</section>
-
-<p class="analysis-intro">
-  ทุกตัวเลข กราฟ และคำอธิบายในหน้านี้คำนวณใหม่จากไฟล์ <code>data/movies.xlsx</code> ทุกครั้งที่เปิดหน้า
-  ถ้าเพิ่ม แก้ไข หรือลบหนัง ผลวิเคราะห์จะเปลี่ยนตามทันที วัดความสำเร็จ 2 ด้าน คือ
-  <strong>รายได้ (gross)</strong> และ <strong>คะแนนผู้ชม (score)</strong>
-</p>
-
-<aside class="notice-box" aria-labelledby="limits-heading">
-  <h2 class="notice-box__title" id="limits-heading">ข้อจำกัดของข้อมูล</h2>
-  <ul class="notice-box__list">
-    <li>
-      หนัง <strong>{{ lim.missing_budget | number }}</strong> เรื่อง ไม่มีข้อมูลทุนสร้าง
-      และ <strong>{{ lim.missing_gross | number }}</strong> เรื่อง ไม่มีข้อมูลรายได้ (ไม่ได้ลบออกจากข้อมูล)
-    </li>
-    <li>
-      การวิเคราะห์ด้านการเงิน (regression, Profit, ROI) ใช้เฉพาะ <strong>{{ lim.financial_rows | number }}</strong> เรื่อง
-      ที่มีทั้งทุนสร้างและรายได้ ({{ lim.financial_share | number(1) }}% ของทั้งหมด)
-    </li>
-    <li>
-      <strong>ความสัมพันธ์ (correlation) ไม่ได้แปลว่าเป็นเหตุและผล</strong> เช่น ทุนสร้างสูงอาจมาพร้อมดาราดังและการตลาดที่มากกว่า
-      ซึ่งเป็นสาเหตุที่แท้จริงของรายได้
-    </li>
-    <li>รายได้คือรายได้จากบ็อกซ์ออฟฟิศ ไม่รวมค่าการตลาด สตรีมมิ่ง หรือรายได้อื่น ROI ในหน้านี้จึงไม่ใช่กำไรจริงของสตูดิโอ</li>
-    <li>หนังแต่ละเรื่องมีประเภทเดียวในข้อมูล หนังที่เป็นหลายประเภทจะถูกนับในประเภทแรกเท่านั้น</li>
-  </ul>
-</aside>
-
-<nav class="toc" aria-label="สารบัญหน้าวิเคราะห์">
-  <ul>
-    <li><a href="#toolpak">ผลจาก Excel ToolPak</a></li>
-    <li><a href="#q1">1 · ทุนสร้างกับรายได้</a></li>
-    <li><a href="#q2">2 · ประเภทหนัง</a></li>
-    <li><a href="#q3">3 · แนวโน้มตามปี</a></li>
-    <li><a href="#q4">4 · บริษัทและผู้กำกับ</a></li>
-    <li><a href="#q5">5 · ความยาวกับคะแนน</a></li>
-    <li><a href="#q6">6 · ROI ตามประเภท</a></li>
-    <li><a href="#stats">สถิติเชิงพรรณนา</a></li>
-    <li><a href="#correlation">Correlation</a></li>
-  </ul>
-</nav>
-
-{# ------------------------------------------------- Excel Analysis ToolPak #}
-{% macro tp_value(value, kind) -%}
-  {%- if value is none -%}—
-  {%- elif kind == 'money' -%}{{ '-' if value < 0 else '' }}${{ (value | abs) | number(0) }}
-  {%- elif kind == 'int' -%}{{ value | number(0) }}
-  {%- elif kind == 'dec2' -%}{{ value | number(2) }}
-  {%- else -%}{{ value | number(4) }}
-  {%- endif -%}
-{%- endmacro %}
-
-{# Raw ToolPak numbers: huge sums of squares in scientific notation, like Excel #}
+{# ToolPak numbers as Excel shows them: huge sums of squares in scientific notation #}
 {% macro excel_num(value, header='') -%}
   {%- if value is none -%}
   {%- elif header in ('P-value', 'Significance F') -%}{{ '< 0.001' if value < 0.001 else '%.4f' % value }}
   {%- elif (value | abs) >= 1e9 -%}{{ '%.4e' % value }}
-  {%- elif value == (value | round(0)) and (value | abs) < 1e9 -%}{{ value | number(0) }}
+  {%- elif value == (value | round(0)) -%}{{ value | number(0) }}
   {%- else -%}{{ value | number(4) }}
   {%- endif -%}
 {%- endmacro %}
 
-<section class="topic panel" id="toolpak" aria-labelledby="toolpak-title">
+{% macro topic_head(badge, kicker, title, title_id) %}
   <header class="topic__head">
-    <span class="topic__num" aria-hidden="true">XL</span>
+    <span class="topic__num" aria-hidden="true">{{ badge }}</span>
     <div>
-      <p class="topic__kicker">Microsoft Excel · Analysis ToolPak</p>
-      <h2 class="topic__title" id="toolpak-title">ผลวิเคราะห์จาก Excel (Analysis ToolPak)</h2>
+      <p class="topic__kicker">{{ kicker }}</p>
+      <h2 class="topic__title" id="{{ title_id }}">{{ title }}</h2>
     </div>
   </header>
+{% endmacro %}
 
-  {% if toolpak.status == 'missing' %}
-  <div class="toolpak-empty">
-    <p>ยังไม่มีไฟล์ <code>data/analysis.xlsx</code> ส่วนนี้จะแสดงผลจาก Analysis ToolPak เมื่อวางไฟล์ไว้ในโฟลเดอร์ <code>data/</code></p>
-    <p class="footer-muted">ชื่อชีตที่เว็บอ่าน: <code>Descriptive…</code>, <code>Correlation</code>, <code>Regression</code>,
-      <code>Regression_Data</code> และ <code>movies</code> (ข้อมูลที่ใช้รัน ToolPak)</p>
+{% block content %}
+<section class="page-head">
+  <div class="marquee marquee--compact" data-marquee>
+    <p class="marquee__kicker">ANALYSIS TOOLPAK</p>
+    <h1 class="marquee__title">วิเคราะห์ข้อมูล</h1>
+    <p class="marquee__sub">ผลวิเคราะห์ทางสถิติจาก Microsoft Excel</p>
   </div>
+</section>
 
-  {% elif toolpak.status == 'error' %}
-  <div class="sim-error" role="alert">{{ toolpak.error }}</div>
+<p class="analysis-intro">
+  ผลทั้งหมดในหน้านี้มาจากไฟล์ <code>data/analysis.xlsx</code> ที่กลุ่มคำนวณด้วย
+  <strong>Analysis ToolPak ของ Excel</strong> เว็บอ่านไฟล์นี้มาแสดงอย่างเดียว ไม่ได้คำนวณใหม่และไม่แก้ไขไฟล์
+</p>
 
-  {% else %}
-  {% set fresh = toolpak.freshness %}
-  <p class="chart-about">
-    ผลในส่วนนี้มาจากไฟล์ <code>data/analysis.xlsx</code> ที่กลุ่มคำนวณด้วย <strong>Analysis ToolPak ของ Excel</strong>
-    (บันทึกล่าสุด {{ toolpak.modified.strftime('%d/%m/%Y %H:%M') }}) เว็บอ่านไฟล์นี้อย่างเดียว ไม่แก้ไข
+{% if report.status == 'missing' %}
+<section class="panel toolpak-empty">
+  <h2 class="panel__title">ยังไม่มีไฟล์ผลวิเคราะห์</h2>
+  <p>วางไฟล์ <code>analysis.xlsx</code> ที่รัน Analysis ToolPak แล้วไว้ในโฟลเดอร์ <code>data/</code> แล้วรีเฟรชหน้านี้</p>
+  <p class="footer-muted">ชื่อชีตที่เว็บอ่าน: <code>Descriptive…</code> (ขึ้นต้นด้วย Descriptive), <code>Correlation</code>,
+    <code>Regression</code>, <code>Regression_Data</code> และ <code>movies</code> (ข้อมูลที่ใช้รัน ToolPak)</p>
+</section>
+
+{% elif report.status == 'error' %}
+<div class="sim-error" role="alert">{{ report.error }}</div>
+
+{% else %}
+{% set fresh = report.freshness %}
+{% set reg = report.regression %}
+
+<p class="source-line">
+  <span class="source-chip source-chip--excel">Excel</span>
+  ข้อมูลที่ใช้รัน ToolPak: {{ fresh.excel_movies | number }} เรื่อง
+  ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
+  · บันทึกไฟล์ล่าสุด {{ report.modified.strftime('%d/%m/%Y %H:%M') }}
+</p>
+
+{% if fresh.stale %}
+<div class="toolpak-status toolpak-status--stale" role="note">
+  <p><strong>ข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak</strong></p>
+  <p>
+    Excel ใช้ข้อมูล {{ fresh.excel_movies | number }} เรื่อง แต่ตอนนี้ <code>movies.xlsx</code> มี
+    {{ fresh.current_movies | number }} เรื่อง ผลในหน้านี้จึงยังไม่รวมข้อมูลที่เพิ่มหรือแก้ไขภายหลัง
+    ถ้าต้องการให้เป็นปัจจุบัน ให้อัปเดตข้อมูลใน <code>analysis.xlsx</code> แล้วรัน Analysis ToolPak ใหม่
   </p>
-  <p class="source-line">
-    <span class="source-chip source-chip--excel">Excel</span>
-    ข้อมูลที่ใช้รัน ToolPak: {{ fresh.excel_movies | number }} เรื่อง
-    ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
-    {% if fresh.stale %}
-    <span class="source-line__warn">· ข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak ดูรายละเอียดในส่วนตรวจสอบด้วย Python ด้านล่าง</span>
-    {% endif %}
-  </p>
+</div>
+{% endif %}
 
-  <div class="tp-full">
-    <h3 class="tp-full__title"><span class="source-chip source-chip--excel">Excel</span> ผล Analysis ToolPak ฉบับเต็ม (เหมือนในไฟล์ Excel)</h3>
-    {% set reg = toolpak.regression %}
-    {% if reg.stats %}
-    <h4 class="chart-title">Regression — SUMMARY OUTPUT</h4>
-    <div class="tp-grid tp-grid--regression">
-      <div class="table-scroll">
-        <table class="data-table">
-          <caption class="sr-only">Regression Statistics</caption>
-          <thead><tr><th scope="col" colspan="2">Regression Statistics</th></tr></thead>
-          <tbody>
-            {% for label, value in reg.stats.items() %}
-            <tr><th scope="row">{{ label }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      <div class="table-scroll">
-        <table class="data-table">
-          <caption class="sr-only">ANOVA</caption>
-          <thead><tr><th scope="col">ANOVA</th>{% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr></thead>
-          <tbody>
-            {% for label, values in reg.anova.items() %}
-            <tr>
-              <th scope="row">{{ label }}</th>
-              {% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<td class="col-num">{{ excel_num(values.get(h), h) }}</td>{% endfor %}
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% set coef_headers = ['Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'] %}
-    <div class="table-scroll">
-      <table class="data-table">
-        <caption class="sr-only">Coefficients</caption>
-        <thead><tr><th scope="col"></th>{% for h in coef_headers %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr></thead>
-        <tbody>
-          {% for c in reg.coefficients %}
-          <tr>
-            <th scope="row">{{ c.name }}</th>
-            {% for h in coef_headers %}<td class="col-num">{{ excel_num(c.get(h), h) }}</td>{% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-
-    <div class="tp-grid">
-      {% for variable, stats in toolpak.descriptive.items() %}
-      <div class="table-scroll">
-        <h4 class="chart-title">Descriptive Statistics — {{ variable }}</h4>
-        <table class="data-table">
-          <tbody>
-            {% for label, value in stats.items() %}
-            <tr><th scope="row">{{ label }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endfor %}
-      {% if toolpak.correlation.pairs %}
-      <div class="table-scroll">
-        <h4 class="chart-title">Correlation</h4>
-        <table class="data-table">
-          <tbody>
-            {% for pair, value in toolpak.correlation.pairs.items() %}
-            <tr><th scope="row">{{ pair[0] }} กับ {{ pair[1] }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-  {% if toolpak.interpretation %}
-  <p class="topic__answer"><strong>สรุปจากผล ToolPak:</strong> {{ toolpak.interpretation }}
-    (ค่า P-value และช่วงความเชื่อมั่นมาจาก ToolPak โดยตรง)</p>
-  {% endif %}
-
-
-  <div class="python-check" role="region" aria-labelledby="python-check-title">
-    <h3 class="python-check__title" id="python-check-title">
-      <span class="source-chip source-chip--python">Python</span>
-      ตรวจสอบด้วย Python (คำนวณในเว็บ ไม่ได้มาจาก Excel)
-    </h3>
-    <p class="chart-about">
-      ค่าในส่วนนี้<strong>คำนวณด้วยภาษา Python (pandas และ numpy) ในเว็บ ไม่ได้มาจากไฟล์ Excel</strong>
-      ใช้ตรวจผลของ ToolPak ด้านบน 2 เรื่อง: (1) คำนวณซ้ำจาก<strong>ข้อมูลชุดเดียวกับที่ Excel ใช้</strong> เพื่อยืนยันว่าตัวเลขถูกต้อง
-      และ (2) คำนวณจาก<strong>ข้อมูลปัจจุบันในเว็บ</strong> เพื่อดูว่าผลใน Excel ยังเป็นปัจจุบันหรือไม่
-    </p>
-
-    <div class="stat-row">
-      <div class="stat-tile">
-        <p class="stat-tile__label">Python คำนวณได้ตรงกับ ToolPak</p>
-        <p class="stat-tile__value">{{ toolpak.matches }}/{{ toolpak.total }}</p>
-      </div>
-      <div class="stat-tile">
-        <p class="stat-tile__label">ข้อมูลที่ Excel ใช้</p>
-        <p class="stat-tile__value">{{ fresh.excel_movies | number }}</p>
-      </div>
-      <div class="stat-tile">
-        <p class="stat-tile__label">ข้อมูลปัจจุบันในเว็บ</p>
-        <p class="stat-tile__value">{{ fresh.current_movies | number }}</p>
-      </div>
-    </div>
-
-    {% if fresh.stale %}
-    <div class="toolpak-status toolpak-status--stale" role="note">
-      <p><strong>ผลใน Excel ยังไม่ได้อัปเดตตามข้อมูลล่าสุด</strong></p>
-      <p>
-        Excel ใช้ข้อมูล {{ fresh.excel_movies | number }} เรื่อง ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
-        แต่ตอนนี้ <code>movies.xlsx</code> มี {{ fresh.current_movies | number }} เรื่อง ({{ fresh.current_financial | number }} เรื่อง)
-        ตัวเลขในคอลัมน์ "Python · ข้อมูลปัจจุบันในเว็บ" และหัวข้อ 1–6 ด้านล่างจึงต่างจาก Excel เล็กน้อย
-        ถ้าต้องการให้ตรงกัน ให้อัปเดตข้อมูลใน <code>analysis.xlsx</code> แล้วรัน Analysis ToolPak ใหม่
-      </p>
-    </div>
-    {% else %}
-    <div class="toolpak-status toolpak-status--fresh" role="note">
-      <p><strong>ผลใน Excel เป็นปัจจุบัน</strong> ข้อมูลใน <code>analysis.xlsx</code> มีจำนวนเท่ากับข้อมูลปัจจุบันในเว็บ</p>
-    </div>
-    {% endif %}
-
-    <div class="table-scroll">
-      <table class="data-table compare-table">
-        <caption class="sr-only">ตรวจผลจาก Excel Analysis ToolPak ด้วยค่าที่ Python คำนวณในเว็บ</caption>
-        <thead>
-          <tr>
-            <th scope="col">ตัวชี้วัด</th>
-            <th scope="col" class="col-num">Excel ToolPak</th>
-            <th scope="col" class="col-num col-python">Python · ข้อมูลชุดเดียวกับ Excel</th>
-            <th scope="col">ผลตรวจ</th>
-            <th scope="col" class="col-num col-python">Python · ข้อมูลปัจจุบันในเว็บ</th>
-          </tr>
-        </thead>
-        {% for group in toolpak.groups %}
-        <tbody>
-          <tr class="compare-table__group"><th scope="rowgroup" colspan="5">{{ group.title }}</th></tr>
-          {% for r in group.rows %}
-          <tr>
-            <th scope="row">{{ r.label }}</th>
-            <td class="col-num">{{ tp_value(r.excel, r.kind) }}</td>
-            <td class="col-num col-python">{{ tp_value(r.python, r.kind) }}</td>
-            <td>
-              {% if r.match %}<span class="match-badge match-badge--ok">✓ ตรงกัน</span>
-              {% else %}<span class="match-badge match-badge--bad">✗ ไม่ตรง</span>{% endif %}
-            </td>
-            <td class="col-num col-python">{{ tp_value(r.current, r.kind) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        {% endfor %}
-      </table>
-    </div>
-    <p class="topic__note">
-      ถือว่าตรงกันเมื่อต่างกันไม่เกิน 0.0001% (ความคลาดเคลื่อนจากการปัดเศษของคอมพิวเตอร์)
-      · ค่าที่เป็นเงินแสดงเป็นดอลลาร์เต็มจำนวน
-    </p>
-  </div>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q1 #}
-{% set q1 = a.q1 %}
-<section class="topic panel" id="q1" aria-labelledby="q1-title">
-  {{ topic_head(1, 'ทุนสร้างส่งผลต่อรายได้มากแค่ไหน?', 'q1-title') }}
-  {% if q1.ok %}
-  <div class="equation" aria-label="สมการ regression">
-    <p class="equation__label">สมการ Linear Regression</p>
-    <p class="equation__formula">{{ q1.equation }}</p>
-  </div>
-  <div class="stat-row">
-    <div class="stat-tile"><p class="stat-tile__label">Slope (ความชัน)</p><p class="stat-tile__value">{{ q1.slope | number(2) }}</p></div>
-    <div class="stat-tile"><p class="stat-tile__label">Intercept (จุดตัดแกน)</p><p class="stat-tile__value">{{ q1.intercept | money }}</p></div>
-    <div class="stat-tile"><p class="stat-tile__label">R²</p><p class="stat-tile__value">{{ q1.r2 | number(2) }}</p></div>
-    <div class="stat-tile"><p class="stat-tile__label">Pearson r</p><p class="stat-tile__value">{{ q1.r | number(2) }}</p></div>
-    <div class="stat-tile"><p class="stat-tile__label">จำนวนเรื่องที่ใช้</p><p class="stat-tile__value">{{ q1.n | number }}</p></div>
-  </div>
-  <figure class="chart-figure">
-    <div class="chart-box chart-box--scatter">
-      <canvas id="chart-budget-gross" role="img"
-              aria-label="กราฟกระจายทุนสร้างเทียบรายได้ {{ q1.n }} เรื่อง พร้อมเส้น regression. {{ q1.caption }}">
-        กราฟกระจายทุนสร้างเทียบรายได้ ดูข้อมูลสรุปในตารางด้านล่าง
-      </canvas>
-    </div>
-    <figcaption class="chart-caption"><strong>คำตอบ:</strong> {{ q1.caption }}</figcaption>
-  </figure>
-  <details class="table-view">
-    <summary>ดูข้อมูลเป็นตาราง (10 เรื่องที่รายได้สูงสุด)</summary>
-    <div class="table-scroll">
-      <table class="data-table">
-        <thead><tr><th scope="col">ชื่อเรื่อง</th><th scope="col" class="col-num">ปี</th><th scope="col" class="col-num">ทุนสร้าง</th><th scope="col" class="col-num">รายได้</th><th scope="col" class="col-num">รายได้ตามสมการ</th></tr></thead>
-        <tbody>
-          {% for point in (q1.chart.points | sort(attribute='1', reverse=true))[:10] %}
-          <tr>
-            <th scope="row">{{ point[2] }}</th>
-            <td class="col-num">{{ point[3] }}</td>
-            <td class="col-num">{{ point[0] | money }}</td>
-            <td class="col-num">{{ point[1] | money }}</td>
-            <td class="col-num">{{ (q1.slope * point[0] + q1.intercept) | money }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
-  {% else %}
-  <p class="chart-caption">{{ q1.caption }}</p>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q2 #}
-{% set q2 = a.q2 %}
-<section class="topic panel" id="q2" aria-labelledby="q2-title">
-  {{ topic_head(2, 'หนังประเภทไหนทำรายได้และได้คะแนนดีที่สุด?', 'q2-title') }}
-  {% if q2.ok %}
-  {{ genre_note(q2.left_out) }}
-  <div class="chart-grid">
-    <figure class="chart-figure">
-      <h3 class="chart-title">รายได้มัธยฐานตามประเภท</h3>
-      <div class="chart-box" style="--bars: {{ q2.gross.labels | length }}">
-        <canvas id="chart-genre-gross" role="img" aria-label="กราฟแท่งรายได้มัธยฐานตามประเภทหนัง. {{ q2.gross_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q2.gross_caption }}</figcaption>
-      {{ ranked_table(q2.gross, 'รายได้มัธยฐาน', 'money') }}
-    </figure>
-    <figure class="chart-figure">
-      <h3 class="chart-title">คะแนนเฉลี่ยตามประเภท</h3>
-      <div class="chart-box" style="--bars: {{ q2.score.labels | length }}">
-        <canvas id="chart-genre-score" role="img" aria-label="กราฟแท่งคะแนนเฉลี่ยตามประเภทหนัง. {{ q2.score_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q2.score_caption }}</figcaption>
-      {{ ranked_table(q2.score, 'คะแนนเฉลี่ย', 'score') }}
-    </figure>
-  </div>
-  <p class="topic__answer"><strong>คำตอบ:</strong> {{ q2.caption }}</p>
-  {% else %}
-  <p class="chart-caption">{{ q2.caption }}</p>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q3 #}
-{% set q3 = a.q3 %}
-<section class="topic panel" id="q3" aria-labelledby="q3-title">
-  {{ topic_head(3, 'แนวโน้มจำนวนหนัง ทุนสร้าง และรายได้ตามปีเป็นอย่างไร?', 'q3-title') }}
-  {% if q3.ok %}
-  <div class="chart-grid">
-    <figure class="chart-figure">
-      <h3 class="chart-title">จำนวนหนังต่อปี</h3>
-      <div class="chart-box">
-        <canvas id="chart-year-count" role="img" aria-label="กราฟเส้นจำนวนหนังต่อปี. {{ q3.count_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q3.count_caption }}</figcaption>
-    </figure>
-    <figure class="chart-figure">
-      <h3 class="chart-title">ทุนสร้างเฉลี่ยและรายได้เฉลี่ยต่อปี</h3>
-      <div class="chart-box">
-        <canvas id="chart-year-money" role="img" aria-label="กราฟเส้นทุนสร้างเฉลี่ยและรายได้เฉลี่ยต่อปี. {{ q3.money_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q3.money_caption }}</figcaption>
-    </figure>
-  </div>
-  <p class="topic__note">
-        กราฟเงินใช้เฉพาะหนังที่มีทั้งทุนสร้างและรายได้ และแสดงเฉพาะปีที่มีหนังแบบนี้อย่างน้อย {{ a.min_year_financial }} เรื่อง
-    {% if q3.money_left_out %}(ไม่แสดงปี {{ q3.money_left_out | join(', ') }}){% endif %}
-    · แยกเป็น 2 กราฟเพราะจำนวนหนังกับจำนวนเงินมีหน่วยต่างกัน
-  </p>
-  <details class="table-view">
-    <summary>ดูข้อมูลเป็นตาราง</summary>
-    <div class="table-scroll">
-      <table class="data-table">
-        <thead><tr><th scope="col">ปี</th><th scope="col" class="col-num">จำนวนหนัง</th><th scope="col" class="col-num">ทุนสร้างเฉลี่ย</th><th scope="col" class="col-num">รายได้เฉลี่ย</th><th scope="col" class="col-num">เรื่องที่ใช้คำนวณเงิน</th></tr></thead>
-        <tbody>
-          {% set money = q3.money_chart %}
-          {% for year in q3.count_chart.labels %}
-          {% set idx = money.labels.index(year) if year in money.labels else none %}
-          <tr>
-            <th scope="row">{{ year }}</th>
-            <td class="col-num">{{ q3.count_chart['values'][loop.index0] | number }}</td>
-            <td class="col-num">{{ (money.budget[idx] if idx is not none else none) | money }}</td>
-            <td class="col-num">{{ (money.gross[idx] if idx is not none else none) | money }}</td>
-            <td class="col-num">{{ (money.counts[idx] if idx is not none else none) | number }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
-  {% else %}
-  <p class="chart-caption">{{ q3.caption }}</p>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q4 #}
-{% set q4 = a.q4 %}
-<section class="topic panel" id="q4" aria-labelledby="q4-title">
-  {{ topic_head(4, 'บริษัทและผู้กำกับรายไหนทำรายได้สูงสุด?', 'q4-title') }}
-  {% if q4.ok %}
-  <div class="chart-grid">
-    <figure class="chart-figure">
-      <h3 class="chart-title">Top 10 บริษัท (รายได้รวม)</h3>
-      <div class="chart-box" style="--bars: {{ q4.companies.labels | length }}">
-        <canvas id="chart-top-companies" role="img" aria-label="กราฟแท่งแนวนอน 10 บริษัทที่ทำรายได้รวมสูงสุด. {{ q4.company_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q4.company_caption }}</figcaption>
-      {{ ranked_table(q4.companies, 'รายได้รวม', 'money') }}
-    </figure>
-    <figure class="chart-figure">
-      <h3 class="chart-title">Top 10 ผู้กำกับ (รายได้รวม)</h3>
-      <div class="chart-box" style="--bars: {{ q4.directors.labels | length }}">
-        <canvas id="chart-top-directors" role="img" aria-label="กราฟแท่งแนวนอน 10 ผู้กำกับที่ทำรายได้รวมสูงสุด. {{ q4.director_caption }}">
-          ดูข้อมูลในตารางด้านล่าง
-        </canvas>
-      </div>
-      <figcaption class="chart-caption">{{ q4.director_caption }}</figcaption>
-      {{ ranked_table(q4.directors, 'รายได้รวม', 'money') }}
-    </figure>
-  </div>
-  <p class="topic__note">
-        รายได้รวมนับจากทุกเรื่องที่มีข้อมูลรายได้ บริษัทหรือผู้กำกับที่มีผลงานจำนวนมากจึงมีโอกาสติดอันดับมากกว่า
-  </p>
-  {% else %}
-  <p class="chart-caption">{{ q4.caption }}</p>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q5 #}
-{% set q5 = a.q5 %}
-<section class="topic panel" id="q5" aria-labelledby="q5-title">
-  {{ topic_head(5, 'ความยาวหนังสัมพันธ์กับคะแนนหรือไม่?', 'q5-title') }}
-  {% if q5.ok %}
-  <div class="stat-row">
-    <div class="stat-tile"><p class="stat-tile__label">Pearson r</p><p class="stat-tile__value">{{ q5.r | number(2) }}</p></div>
-    {% for band in q5.bands %}
-    <div class="stat-tile"><p class="stat-tile__label">คะแนนเฉลี่ย · {{ band.label }}</p><p class="stat-tile__value">{{ band.mean | number(2) }}</p></div>
+<nav class="toc" aria-label="สารบัญหน้าวิเคราะห์">
+  <ul>
+    {% if reg.stats %}<li><a href="#regression">Regression</a></li>{% endif %}
+    {% for block in report.descriptive %}
+    <li><a href="#descriptive-{{ loop.index }}">Descriptive Statistics: {{ block.variable }}</a></li>
     {% endfor %}
-  </div>
-  <figure class="chart-figure">
-    <div class="chart-box chart-box--scatter">
-      <canvas id="chart-runtime-score" role="img" aria-label="กราฟกระจายความยาวหนังเทียบคะแนน {{ q5.n }} เรื่อง. {{ q5.caption }}">
-        ดูข้อมูลในตารางด้านล่าง
-      </canvas>
-    </div>
-    <figcaption class="chart-caption"><strong>คำตอบ:</strong> {{ q5.caption }}</figcaption>
-  </figure>
-  <details class="table-view">
-    <summary>ดูข้อมูลเป็นตาราง</summary>
+    {% if report.correlation %}<li><a href="#correlation">Correlation</a></li>{% endif %}
+  </ul>
+</nav>
+
+{% set count = namespace(n=0) %}
+
+{# ------------------------------------------------------------ Regression #}
+{% if reg.stats %}
+{% set count.n = count.n + 1 %}
+<section class="topic panel" id="regression" aria-labelledby="regression-title">
+  {{ topic_head('%02d' % count.n, 'Analysis ToolPak · Regression', 'Regression — SUMMARY OUTPUT', 'regression-title') }}
+
+  <div class="tp-grid tp-grid--regression">
     <div class="table-scroll">
       <table class="data-table">
-        <thead><tr><th scope="col">ความยาว</th><th scope="col" class="col-num">คะแนนเฉลี่ย</th><th scope="col" class="col-num">จำนวนเรื่อง</th></tr></thead>
+        <caption class="sr-only">Regression Statistics</caption>
+        <thead><tr><th scope="col" colspan="2">Regression Statistics</th></tr></thead>
         <tbody>
-          {% for band in q5.bands %}
-          <tr><th scope="row">{{ band.label }}</th><td class="col-num">{{ band.mean | number(2) }}</td><td class="col-num">{{ band.count | number }}</td></tr>
+          {% for label, value in reg.stats.items() %}
+          <tr><th scope="row">{{ label }}</th><td class="col-num">{{ excel_num(value) }}</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </details>
-  {% else %}
-  <p class="chart-caption">{{ q5.caption }}</p>
-  {% endif %}
-</section>
-
-{# ------------------------------------------------------------------ Q6 #}
-{% set q6 = a.q6 %}
-<section class="topic panel" id="q6" aria-labelledby="q6-title">
-  {{ topic_head(6, 'ROI (รายได้ ÷ ทุนสร้าง) ของแต่ละประเภทเป็นอย่างไร?', 'q6-title') }}
-  {% if q6.ok %}
-  {{ genre_note(q6.left_out) }}
-  <figure class="chart-figure">
-    <h3 class="chart-title">ROI มัธยฐานตามประเภท (เส้นแนวตั้ง = ROI 1 คือรายได้เท่าทุน)</h3>
-    <div class="chart-box" style="--bars: {{ q6.chart.labels | length }}">
-      <canvas id="chart-genre-roi" role="img" aria-label="กราฟแท่ง ROI มัธยฐานตามประเภทหนัง. {{ q6.caption }}">
-        ดูข้อมูลในตารางด้านล่าง
-      </canvas>
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">ANOVA</caption>
+        <thead>
+          <tr><th scope="col">ANOVA</th>{% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for label, values in reg.anova.items() %}
+          <tr>
+            <th scope="row">{{ label }}</th>
+            {% for h in ['df', 'SS', 'MS', 'F', 'Significance F'] %}<td class="col-num">{{ excel_num(values.get(h), h) }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    <figcaption class="chart-caption"><strong>คำตอบ:</strong> {{ q6.caption }}</figcaption>
-  </figure>
-  {{ ranked_table(q6.chart, 'ROI มัธยฐาน', 'roi') }}
-  {% else %}
-  <p class="chart-caption">{{ q6.caption }}</p>
-  {% endif %}
-</section>
+  </div>
 
-{# ------------------------------------------------------- Descriptive stats #}
-<section class="topic panel" id="stats" aria-labelledby="stats-title">
-  <header class="topic__head">
-    <span class="topic__num" aria-hidden="true">Σ</span>
-    <div>
-      <p class="topic__kicker">Descriptive Statistics</p>
-      <h2 class="topic__title" id="stats-title">สถิติเชิงพรรณนา</h2>
-    </div>
-  </header>
+  {% set coef_headers = ['Coefficients', 'Standard Error', 't Stat', 'P-value', 'Lower 95%', 'Upper 95%'] %}
   <div class="table-scroll">
-    <table class="data-table data-table--stats">
-      <caption class="sr-only">ค่าสถิติเชิงพรรณนาของคะแนน ทุนสร้าง รายได้ และความยาว</caption>
+    <table class="data-table">
+      <caption class="sr-only">Coefficients</caption>
       <thead>
-        <tr>
-          <th scope="col">ตัวแปร</th>
-          <th scope="col" class="col-num">จำนวน (n)</th>
-          <th scope="col" class="col-num">ค่าเฉลี่ย</th>
-          <th scope="col" class="col-num">มัธยฐาน</th>
-          <th scope="col" class="col-num">ฐานนิยม</th>
-          <th scope="col" class="col-num">SD</th>
-          <th scope="col" class="col-num">ต่ำสุด</th>
-          <th scope="col" class="col-num">สูงสุด</th>
-        </tr>
+        <tr><th scope="col"></th>{% for h in coef_headers %}<th scope="col" class="col-num">{{ h }}</th>{% endfor %}</tr>
       </thead>
       <tbody>
-        {% for row in a.stats.rows %}
+        {% for c in reg.coefficients %}
         <tr>
-          <th scope="row">{{ row.label }}</th>
-          <td class="col-num">{{ row.n | number }}</td>
-          <td class="col-num">{{ stat_value(row.column, row.mean) }}</td>
-          <td class="col-num">{{ stat_value(row.column, row.median) }}</td>
-          <td class="col-num">
-            {{ stat_value(row.column, row.mode) }}
-            {% if row.mode is not none %}<span class="cell-note">({{ row.mode_count | number }} เรื่อง)</span>{% endif %}
-          </td>
-          <td class="col-num">{{ stat_value(row.column, row.sd) }}</td>
-          <td class="col-num">{{ stat_value(row.column, row.min) }}</td>
-          <td class="col-num">{{ stat_value(row.column, row.max) }}</td>
+          <th scope="row">{{ c.name }}</th>
+          {% for h in coef_headers %}<td class="col-num">{{ excel_num(c.get(h), h) }}</td>{% endfor %}
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  <p class="topic__note">
-        แต่ละตัวแปรคำนวณจากเรื่องที่มีค่านั้น (n ต่างกันได้) · SD เป็นค่าของกลุ่มตัวอย่าง (เหมือน STDEV.S ใน Excel)
-    · ฐานนิยมแสดง “—” เมื่อไม่มีค่าใดซ้ำกัน
-  </p>
-  {% if a.stats.caption %}<p class="topic__answer"><strong>ข้อสังเกต:</strong> {{ a.stats.caption }}</p>{% endif %}
-</section>
 
-{# -------------------------------------------------------------- Correlation #}
-{% set corr = a.correlation %}
-<section class="topic panel" id="correlation" aria-labelledby="corr-title">
-  <header class="topic__head">
-    <span class="topic__num" aria-hidden="true">r</span>
-    <div>
-      <p class="topic__kicker">Pearson Correlation</p>
-      <h2 class="topic__title" id="corr-title">ตารางความสัมพันธ์ (Correlation Heatmap)</h2>
-    </div>
-  </header>
-  <div class="corr-layout">
-    <div class="table-scroll">
-      <table class="heatmap">
-        <caption class="sr-only">ค่าสหสัมพันธ์ Pearson ระหว่างคะแนน จำนวนโหวต ทุนสร้าง รายได้ และความยาว</caption>
-        <thead>
-          <tr>
-            <td></td>
-            {% for label in corr.labels %}<th scope="col">{{ label }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row_label in corr.labels %}
-          {% set i = loop.index0 %}
-          <tr>
-            <th scope="row">{{ row_label }}</th>
-            {% for value in corr.cells[i] %}
-            <td style="{{ heat_style(value) }}" title="{{ row_label }} กับ {{ corr.labels[loop.index0] }}: r = {{ value | number(2) }}">
-              {{ value | number(2) }}
-            </td>
-            {% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <div class="heat-legend" aria-hidden="true">
-        <span>−1</span><span class="heat-legend__bar"></span><span>+1</span>
-      </div>
-      <p class="heat-legend__text">สีฟ้า = สัมพันธ์เชิงลบ · สีเทา = ไม่สัมพันธ์ · สีทอง = สัมพันธ์เชิงบวก (ยิ่งเข้มยิ่งสัมพันธ์มาก)</p>
-    </div>
-    <div class="how-to-read">
-      <h3>วิธีอ่านค่า r</h3>
-      <ul>
-        <li><strong>r ใกล้ +1</strong> ตัวแปรหนึ่งเพิ่ม อีกตัวมักเพิ่มตาม</li>
-        <li><strong>r ใกล้ −1</strong> ตัวแปรหนึ่งเพิ่ม อีกตัวมักลดลง</li>
-        <li><strong>r ใกล้ 0</strong> แทบไม่มีความสัมพันธ์เชิงเส้น</li>
-      </ul>
-      <p>เกณฑ์ที่ใช้ในหน้านี้ (ค่าสัมบูรณ์ของ r):</p>
-      <ul class="how-to-read__scale">
-        <li>&lt; 0.1 แทบไม่มีความสัมพันธ์</li>
-        <li>0.1–0.3 ต่ำ</li>
-        <li>0.3–0.5 ปานกลาง</li>
-        <li>0.5–0.7 ค่อนข้างสูง</li>
-        <li>≥ 0.7 สูง</li>
-      </ul>
-    </div>
+  {% if report.regression_caption %}
+  <p class="topic__answer"><strong>สรุป:</strong> {{ report.regression_caption }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ------------------------------------------------- Descriptive Statistics #}
+{% for block in report.descriptive %}
+{% set count.n = count.n + 1 %}
+<section class="topic panel" id="descriptive-{{ loop.index }}" aria-labelledby="descriptive-{{ loop.index }}-title">
+  {{ topic_head('%02d' % count.n, 'Analysis ToolPak · Descriptive Statistics',
+                'Descriptive Statistics: ' ~ block.variable, 'descriptive-' ~ loop.index ~ '-title') }}
+  <div class="table-scroll">
+    <table class="data-table tp-descriptive">
+      <caption class="sr-only">ค่าสถิติเชิงพรรณนาของ {{ block.variable }} จาก Analysis ToolPak</caption>
+      <thead>
+        <tr><th scope="col">สถิติ</th><th scope="col">ความหมาย</th><th scope="col" class="col-num">ค่า</th></tr>
+      </thead>
+      <tbody>
+        {% for row in block.rows %}
+        <tr>
+          <th scope="row">{{ row.label }}</th>
+          <td>{{ row.thai }}</td>
+          <td class="col-num">{{ excel_num(row.value) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  {% if corr.caption %}<p class="topic__answer"><strong>ข้อสังเกต:</strong> {{ corr.caption }} และค่า r ไม่ได้บอกว่าตัวแปรใดเป็นสาเหตุของอีกตัวแปร</p>{% endif %}
+  {% if block.caption %}
+  <p class="topic__answer"><strong>สรุป:</strong> {{ block.caption }}</p>
+  {% endif %}
 </section>
+{% endfor %}
 
-{# Data for charts.js (Chart.js reads it from here) #}
-<script type="application/json" id="analysis-data">
-  {{ {
-    'budget_gross': a.q1.chart if a.q1.ok else none,
-    'genre_gross': a.q2.gross if a.q2.ok else none,
-    'genre_score': a.q2.score if a.q2.ok else none,
-    'year_count': a.q3.count_chart if a.q3.ok else none,
-    'year_money': a.q3.money_chart if a.q3.ok else none,
-    'top_companies': a.q4.companies if a.q4.ok else none,
-    'top_directors': a.q4.directors if a.q4.ok else none,
-    'runtime_score': a.q5.chart if a.q5.ok else none,
-    'genre_roi': a.q6.chart if a.q6.ok else none,
-  } | tojson }}
-</script>
-{% endblock %}
-
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/vendor/chart.umd.js') }}"></script>
-<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{# ------------------------------------------------------------ Correlation #}
+{% if report.correlation %}
+{% set count.n = count.n + 1 %}
+<section class="topic panel" id="correlation" aria-labelledby="correlation-title">
+  {{ topic_head('%02d' % count.n, 'Analysis ToolPak · Correlation', 'Correlation', 'correlation-title') }}
+  <div class="table-scroll">
+    <table class="data-table tp-correlation">
+      <caption class="sr-only">ค่าสหสัมพันธ์ (Pearson r) จาก Analysis ToolPak</caption>
+      <thead>
+        <tr><th scope="col">ตัวแปร</th><th scope="col" class="col-num">r</th></tr>
+      </thead>
+      <tbody>
+        {% for pair in report.correlation %}
+        <tr><th scope="row">{{ pair.a }} กับ {{ pair.b }}</th><td class="col-num">{{ excel_num(pair.r) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="topic__answer">
+    <strong>สรุป:</strong>
+    {% for pair in report.correlation %}{{ pair.caption }}{% if not loop.last %} · {% endif %}{% endfor %}
+    · ค่า r ใกล้ 1 แปลว่าสัมพันธ์กันมาก แต่ไม่ได้แปลว่าตัวแปรหนึ่งเป็นสาเหตุของอีกตัวแปร
+  </p>
+</section>
+{% endif %}
+{% endif %}
 {% endblock %}

@@ -78,11 +78,6 @@ GENRE_COLORS = {
 }
 DEFAULT_GENRE_COLOR = "#7c8799"
 
-# Correlation heatmap: blue for negative r, gold for positive r, neutral at 0.
-HEAT_NEGATIVE = (70, 141, 229)
-HEAT_NEUTRAL = (39, 48, 82)
-HEAT_POSITIVE = (242, 193, 78)
-
 # Navbar entries: (endpoint, label, emoji), the same on every page.
 NAV_ITEMS = [
     ("home", "หน้าแรก", ""),
@@ -125,18 +120,6 @@ def format_text(value):
 
 def genre_color(genre):
     return GENRE_COLORS.get(genre, DEFAULT_GENRE_COLOR)
-
-
-def heat_style(r):
-    """Inline style for one correlation heatmap cell (background + readable text)."""
-    if is_missing(r):
-        return ""
-    pole = HEAT_POSITIVE if r >= 0 else HEAT_NEGATIVE
-    t = min(abs(r), 1.0)
-    rgb = [round(n + (p - n) * t) for n, p in zip(HEAT_NEUTRAL, pole)]
-    luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255
-    text = "#1d1404" if luminance > 0.5 else "#f4efe3"
-    return f"background-color: rgb({rgb[0]}, {rgb[1]}, {rgb[2]}); color: {text};"
 
 
 def nav_items():
@@ -337,11 +320,9 @@ def movie_delete(movie_id):
 
 @app.route("/analysis", endpoint="analysis")
 def analysis_page():
-    """Statistics and charts, recomputed from the current Excel file on every visit."""
-    df = data_service.load_movies()
-    results = analysis.run_analysis(df)
-    toolpak = analysis.toolpak_comparison(df, data_service.read_toolpak_results())
-    return render_template("analysis.html", a=results, toolpak=toolpak, heat_style=heat_style)
+    """Results the group computed with Excel's Analysis ToolPak (data/analysis.xlsx)."""
+    report = analysis.toolpak_report(data_service.load_movies(), data_service.read_toolpak_results())
+    return render_template("analysis.html", report=report)
 
 
 # ---------------------------------------------------------------------------

@@ -360,7 +360,6 @@ code {
   margin-right: auto;
 }
 
-
 .brand__name {
   font-family: var(--font-display);
   font-size: 2rem;
@@ -935,6 +934,10 @@ select:focus-visible {
   padding: 4px 10px;
 }
 
+.score-value {
+  white-space: nowrap;
+}
+
 /* Laptop / tablet widths: a little more compact so all columns fit without scrolling */
 @media (min-width: 981px) and (max-width: 1240px) {
   .movie-table {
@@ -1120,7 +1123,6 @@ select:focus-visible {
   border-radius: var(--radius);
   background: rgba(8, 12, 28, 0.7);
 }
-
 
 .empty-state__title {
   font-size: 1.25rem;
@@ -1625,15 +1627,6 @@ select:focus-visible {
   margin-bottom: 8px;
 }
 
-.notice-box__list {
-  margin: 0;
-  padding-left: 1.3em;
-}
-
-.notice-box__list li {
-  margin-bottom: 4px;
-}
-
 .notice-box strong {
   color: var(--gold-light);
 }
@@ -1730,28 +1723,6 @@ select:focus-visible {
   color: var(--gold-light);
 }
 
-/* Regression equation + stat tiles */
-.equation {
-  margin-bottom: 14px;
-  padding: 14px 18px;
-  border: 1px dashed var(--gold-dark);
-  border-radius: 10px;
-  background: var(--bg-deep);
-}
-
-.equation__label {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.equation__formula {
-  margin: 2px 0 0;
-  font-size: clamp(1.1rem, 2.6vw, 1.45rem);
-  font-weight: 700;
-  color: var(--gold-light);
-}
-
 @media (max-width: 760px) {
   .topic {
     padding: 18px 16px;
@@ -1787,99 +1758,7 @@ select:focus-visible {
   color: var(--gold);
 }
 
-/* Charts */
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-
-@media (max-width: 900px) {
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.chart-figure {
-  margin: 0;
-  min-width: 0;
-}
-
-.chart-title {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-
-.chart-box {
-  --bars: 0;
-  position: relative;
-  width: 100%;
-  /* Room for the plot plus the axis band; ranked bars grow with their count */
-  height: max(300px, calc(var(--bars) * 36px + 70px));
-  padding: 12px 8px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  background: rgba(5, 6, 13, 0.45);
-}
-
-.chart-box--scatter {
-  height: 440px;
-}
-
-@media (max-width: 760px) {
-  .chart-box--scatter {
-    height: 360px;
-  }
-}
-
-.chart-box--error {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: auto;
-  min-height: 120px;
-  padding: 20px;
-  text-align: center;
-  color: var(--error);
-}
-
-.chart-caption {
-  margin: 10px 0 0;
-  color: var(--text);
-  font-size: 0.95rem;
-}
-
-.chart-caption strong {
-  color: var(--gold-light);
-}
-
-/* Table view under each chart */
-.table-view {
-  margin-top: 12px;
-}
-
-.table-view summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 4px 2px;
-  cursor: pointer;
-  color: var(--gold-light);
-  font-weight: 600;
-  font-size: 0.92rem;
-}
-
-.table-view summary:hover {
-  color: #fff;
-}
-
-.table-view[open] summary {
-  margin-bottom: 8px;
-}
-
+/* Tables */
 .table-scroll {
   overflow-x: auto;
 }
@@ -1910,110 +1789,7 @@ select:focus-visible {
   font-weight: 600;
 }
 
-.data-table--stats td {
-  white-space: nowrap;
-}
-
-.cell-note {
-  display: block;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-/* Correlation heatmap */
-.corr-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-@media (max-width: 900px) {
-  .corr-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.heatmap {
-  border-collapse: separate;
-  border-spacing: 2px; /* surface gap between cells */
-  font-variant-numeric: tabular-nums;
-}
-
-.heatmap th {
-  padding: 6px 10px;
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.heatmap thead th {
-  text-align: center;
-}
-
-.heatmap tbody th {
-  text-align: right;
-}
-
-.heatmap td {
-  min-width: 68px;
-  height: 56px;
-  text-align: center;
-  font-weight: 700;
-  border-radius: 4px;
-}
-
-.heat-legend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 360px;
-  margin-top: 12px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.heat-legend__bar {
-  flex: 1;
-  height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgb(70, 141, 229), rgb(39, 48, 82), rgb(242, 193, 78));
-}
-
-.heat-legend__text {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.how-to-read {
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(5, 6, 13, 0.55);
-  font-size: 0.92rem;
-}
-
-.how-to-read h3 {
-  font-size: 1rem;
-  color: var(--gold);
-}
-
-.how-to-read ul {
-  margin: 0 0 10px;
-  padding-left: 1.2em;
-}
-
-.how-to-read p {
-  margin-bottom: 4px;
-}
-
-.how-to-read__scale {
-  color: var(--text-muted);
-}
-
-/* Comparison with Excel Analysis ToolPak */
+/* Notice when the ToolPak results are older than the current data */
 .toolpak-status {
   margin-bottom: 18px;
   padding: 14px 18px;
@@ -2038,52 +1814,13 @@ select:focus-visible {
   color: var(--gold-light);
 }
 
-.toolpak-status--fresh {
-  border-color: #3fae6a;
-  background: rgba(63, 174, 106, 0.12);
-}
-
-.toolpak-status--fresh strong {
-  color: var(--success);
-}
-
 .toolpak-empty {
   padding: 16px 18px;
   border: 2px dashed var(--line);
   border-radius: 10px;
 }
 
-.compare-table .compare-table__group th {
-  padding-top: 16px;
-  color: var(--gold);
-  font-weight: 700;
-  border-bottom: 1px solid var(--gold-dark);
-}
-
-.compare-table td.col-num {
-  white-space: nowrap;
-}
-
-.match-badge {
-  display: inline-block;
-  padding: 1px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.match-badge--ok {
-  background: rgba(63, 174, 106, 0.2);
-  color: var(--success);
-}
-
-.match-badge--bad {
-  background: rgba(255, 158, 158, 0.18);
-  color: var(--error);
-}
-
-/* Where a number comes from: Excel (ToolPak) or Python (computed in the web) */
+/* Label showing that the numbers come from Excel (ToolPak) */
 .source-chip {
   display: inline-block;
   padding: 1px 10px;
@@ -2100,61 +1837,9 @@ select:focus-visible {
   color: #fff;
 }
 
-.source-chip--python {
-  background: #2c5aa0;
-  color: #fff;
-}
-
 .source-line {
   margin: 0 0 6px;
   font-size: 0.92rem;
-}
-
-.source-line__warn {
-  color: var(--gold-light);
-  font-weight: 600;
-}
-
-/* Full ToolPak output (the main result), always visible */
-.tp-full {
-  margin-top: 14px;
-}
-
-/* Python check: a separate, clearly labelled box after the ToolPak results */
-.python-check {
-  margin-top: 28px;
-  padding: 18px 20px;
-  border: 2px solid rgba(70, 141, 229, 0.55);
-  border-radius: var(--radius);
-  background: rgba(70, 141, 229, 0.06);
-}
-
-.python-check__title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  font-size: 1.1rem;
-  color: #cfe0ff;
-}
-
-.compare-table .col-python {
-  background: rgba(70, 141, 229, 0.09);
-}
-
-.compare-table thead .col-python {
-  color: #a9c7ff;
-}
-
-.tp-full__title {
-  font-size: 1.1rem;
-  color: var(--gold);
-  margin-bottom: 12px;
-}
-
-.tp-full .chart-title {
-  margin-top: 8px;
 }
 
 /* Regression Statistics (2 columns) beside ANOVA (6 columns): give ANOVA more room */
@@ -2352,7 +2037,6 @@ input[type="range"]:hover {
   padding: 24px 16px 8px;
   color: var(--text-muted);
 }
-
 
 .sim-error {
   padding: 14px 18px;
@@ -2906,7 +2590,6 @@ input[type="range"]:hover {
   border-color: var(--gold);
   transform: translateY(-3px);
 }
-
 
 .shortcut__title {
   font-weight: 700;

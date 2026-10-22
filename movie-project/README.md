@@ -5,13 +5,13 @@
 เว็บแอปสำหรับโปรเจกต์กลุ่มวิชา Data Tools หัวข้อ **"ปัจจัยที่ส่งผลต่อความสำเร็จของภาพยนตร์ ปี 1980–2020"**
 ใช้ชุดข้อมูล Movie Industry (`movies.csv` 7,668 เรื่อง 15 คอลัมน์) วัดความสำเร็จ 2 ด้าน คือ **รายได้ (gross)** และ **คะแนนผู้ชม (score)**
 
-เว็บนี้อ่าน เพิ่ม แก้ไข และลบข้อมูลในไฟล์ Excel (`data/movies.xlsx`) จริง และทุกหน้าที่แสดงสถิติจะคำนวณใหม่จากไฟล์นั้นทุกครั้ง ผลวิเคราะห์จึงเปลี่ยนตามข้อมูลที่อัปเดต
+เว็บนี้อ่าน เพิ่ม แก้ไข และลบข้อมูลในไฟล์ Excel (`data/movies.xlsx`) จริง หน้าวิเคราะห์ข้อมูลแสดงผลที่กลุ่มคำนวณด้วย **Analysis ToolPak ของ Excel** (`data/analysis.xlsx`) ส่วนตัวเลขในหน้าแรก Dashboard และ Simulator คำนวณใหม่จาก `movies.xlsx` ทุกครั้ง
 
 ---
 
 ## วิธีติดตั้งและรัน
 
-ต้องมี **Python 3.10 ขึ้นไป** · เว็บใช้งานได้โดยไม่ต้องต่ออินเทอร์เน็ต (ฟอนต์และ Chart.js อยู่ในโปรเจกต์แล้ว) ยกเว้นหน้า Dashboard ที่ต้องโหลดจาก Tableau Public
+ต้องมี **Python 3.10 ขึ้นไป** · เว็บใช้งานได้โดยไม่ต้องต่ออินเทอร์เน็ต (ฟอนต์อยู่ในโปรเจกต์แล้ว) ยกเว้นหน้า Dashboard ที่ต้องโหลดจาก Tableau Public
 
 ```bash
 cd movie-project
@@ -82,21 +82,24 @@ TABLEAU_URL = "https://public.tableau.com/views/MovieIndustry/Dashboard"
 | 🎞️ รายการหนัง | `/movies` | ค้นหาจากชื่อเรื่อง ผู้กำกับ หรือนักแสดง กรองตามช่วงปี ประเภท เรท เรียงตามปี คะแนน ทุนสร้าง รายได้ แบ่งหน้าละ 20 เรื่อง ค่าการค้นหาเก็บใน URL (กดย้อนกลับแล้วยังเห็นผลเดิม) บนมือถือแสดงเป็นการ์ด |
 | ➕ เพิ่ม / ✏️ แก้ไข | `/movies/new`, `/movies/<id>/edit` | ฟอร์มเดียวกัน ครบทุกคอลัมน์ ตรวจข้อมูลทั้งฝั่งเบราว์เซอร์และเซิร์ฟเวอร์ บันทึกลง Excel แล้วแสดงข้อความรูปตั๋วหนังพร้อมเสียงสเลท |
 | 🗑️ ลบ | ปุ่มในตารางและในหน้าแก้ไข | มีกล่องยืนยันก่อนลบทุกครั้ง |
-| 📊 วิเคราะห์ข้อมูล | `/analysis` | คำถามวิจัย 6 ข้อ (กราฟ + คำตอบที่สร้างจากตัวเลขจริง), สถิติเชิงพรรณนา, Correlation heatmap, กล่องข้อจำกัดของข้อมูล และตารางข้อมูลใต้ทุกกราฟ |
+| 📊 วิเคราะห์ข้อมูล | `/analysis` | ผลจาก Excel Analysis ToolPak (`data/analysis.xlsx`): Regression (SUMMARY OUTPUT, ANOVA, Coefficients), Descriptive Statistics และ Correlation พร้อมสรุปผลที่เขียนจากตัวเลขใน Excel และแจ้งเตือนเมื่อข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak |
 | 🎬 Box Office Simulator | `/simulator` | สร้างหนังสมมติ (ประเภท ทุนสร้าง ความยาว เรท ปี) แล้วดูรายได้ ROI คะแนนที่คาดการณ์ ผล BLOCKBUSTER / HIT / BREAK EVEN / FLOP และหนังจริงที่ใกล้เคียง 5 เรื่อง |
 | 🗺️ Dashboard | `/dashboard` | ฝัง Tableau Public แบบ responsive พร้อมคำอธิบายกราฟทั้ง 5 |
 | 🔧 API | `/api/simulate` (POST), `/api/status` | ผล Simulator เป็น JSON และสถานะไฟล์ข้อมูล |
 
-คำถามวิจัยในหน้าวิเคราะห์:
+### หน้าวิเคราะห์ข้อมูลกับไฟล์ analysis.xlsx
 
-1. ทุนสร้างส่งผลต่อรายได้มากแค่ไหน (scatter plot + เส้น regression, slope, intercept, R²)
-2. หนังประเภทไหนทำรายได้และได้คะแนนดีที่สุด (รายได้มัธยฐาน และคะแนนเฉลี่ย ตามประเภท)
-3. แนวโน้มจำนวนหนัง ทุนสร้าง และรายได้ตามปี
-4. บริษัทและผู้กำกับที่ทำรายได้สูงสุด (Top 10)
-5. ความยาวหนังสัมพันธ์กับคะแนนหรือไม่ (scatter plot + ค่า r)
-6. ROI ของแต่ละประเภท (ใช้มัธยฐาน เพราะ ROI มีค่าผิดปกติสูงมาก)
+เว็บอ่าน `data/analysis.xlsx` อย่างเดียว (ไม่เขียนทับ เพื่อไม่ให้กราฟหรือการตั้งค่าใน Excel หาย) และหาค่าจากชื่อแถว เช่น "R Square" ไม่ได้อ่านจากตำแหน่งเซลล์ตายตัว ชีตที่เว็บอ่าน:
 
-การจัดอันดับตามประเภทนับเฉพาะประเภทที่มีข้อมูลอย่างน้อย 30 เรื่อง
+| ชีต | เนื้อหา |
+|---|---|
+| `Regression` | ผล Regression จาก ToolPak (SUMMARY OUTPUT) |
+| `Regression_Data` | ข้อมูล X/Y ที่ใช้รัน Regression |
+| `Descriptive…` | ผล Descriptive Statistics (ทุกชีตที่ชื่อขึ้นต้นด้วย `Descriptive` เช่น `Descriptive_Score`) |
+| `Correlation` | ผล Correlation จาก ToolPak |
+| `movies` | ข้อมูลหนังที่ใช้รัน ToolPak (ใช้เทียบจำนวนกับข้อมูลปัจจุบันในเว็บ) |
+
+ผล ToolPak ไม่คำนวณใหม่เอง ถ้าเพิ่มหรือแก้ไขหนังในเว็บ หน้าวิเคราะห์จะขึ้นแจ้งเตือนว่าข้อมูลเปลี่ยนไป ให้อัปเดตข้อมูลใน `analysis.xlsx` แล้วรัน Analysis ToolPak ใหม่
 
 ---
 
@@ -155,18 +158,19 @@ score = c0 + c1·runtime + c2·year + (dummy ของประเภทหน�
 movie-project/
 ├── app.py              Routes ของ Flask และค่าตั้งค่า (GROUP, TABLEAU_URL, สีประจำประเภท)
 ├── data_service.py     อ่าน/เขียน Excel, แปลงจาก CSV, ทำความสะอาดข้อมูล, ตรวจข้อมูลในฟอร์ม
-├── analysis.py         สถิติ, correlation, regression และโมเดลของ Simulator
+├── analysis.py         จัดผล ToolPak สำหรับหน้าวิเคราะห์, ตัวเลขของหน้าแรก/Dashboard และโมเดลของ Simulator
 ├── requirements.txt
 ├── README.md
 ├── data/
 │   ├── movies.csv      ข้อมูลต้นฉบับ
-│   └── movies.xlsx     แหล่งข้อมูลหลัก (สร้างอัตโนมัติตอนรันครั้งแรก)
+│   ├── movies.xlsx     แหล่งข้อมูลหลัก (สร้างอัตโนมัติตอนรันครั้งแรก)
+│   └── analysis.xlsx   ผลวิเคราะห์จาก Excel Analysis ToolPak (เว็บอ่านอย่างเดียว)
 ├── templates/
 │   ├── base.html       โครงหน้า: navbar, ม่าน, flash message รูปตั๋ว, footer แถบฟิล์ม
 │   ├── index.html      หน้าแรก
 │   ├── movies.html     รายการหนัง
 │   ├── form.html       ฟอร์มเพิ่ม/แก้ไข
-│   ├── analysis.html   หน้าวิเคราะห์ข้อมูล
+│   ├── analysis.html   หน้าวิเคราะห์ข้อมูล (ผลจาก Excel ToolPak)
 │   ├── simulator.html  Box Office Simulator
 │   └── dashboard.html  Tableau Dashboard
 └── static/
@@ -175,14 +179,12 @@ movie-project/
     └── js/
         ├── main.js       เมนู, หลอดไฟ marquee, ตัวนับ, กล่องยืนยัน, ตรวจฟอร์ม
         ├── audio.js      เสียงประกอบด้วย Web Audio API
-        ├── charts.js     กราฟ Chart.js ในหน้าวิเคราะห์
-        ├── simulator.js  การทำงานและแอนิเมชันของ Simulator
-        └── vendor/chart.umd.js   Chart.js 4.4.1
+        └── simulator.js  การทำงานและแอนิเมชันของ Simulator
 ```
 
-โค้ดอ่าน/เขียน Excel (`data_service.py`) แยกจากโค้ดคำนวณสถิติ (`analysis.py`) ส่วน `app.py` มีเฉพาะ routes
+โค้ดอ่าน/เขียน Excel (`data_service.py`) แยกจากโค้ดจัดการผลวิเคราะห์และคำนวณ (`analysis.py`) ส่วน `app.py` มีเฉพาะ routes
 
-**เทคโนโลยีที่ใช้**: Python Flask, pandas, numpy, openpyxl · HTML, CSS, Vanilla JavaScript · Chart.js 4.4.1 (ไฟล์ในเครื่อง, MIT License) · ฟอนต์ Noto Sans Thai และ Bebas Neue (ไฟล์ .woff2 ในเครื่อง, SIL Open Font License)
+**เทคโนโลยีที่ใช้**: Python Flask, pandas, numpy, openpyxl · HTML, CSS, Vanilla JavaScript · ฟอนต์ Noto Sans Thai และ Bebas Neue (ไฟล์ .woff2 ในเครื่อง, SIL Open Font License)
 
 ---
 
@@ -193,7 +195,7 @@ movie-project/
 - **คีย์บอร์ด**: ใช้งานได้ครบทุกหน้า (Tab, Space, Enter, ปุ่มลูกศรในตัวเลือกประเภทหนัง) และทุกปุ่ม ลิงก์ slider ช่องกรอก มีกรอบ focus ที่เห็นชัด
 - **Screen reader**:
   - ผล Simulator และผลการบันทึกข้อมูลประกาศผ่าน `aria-live`
-  - ทุกกราฟมีข้อความอธิบายและตารางข้อมูลแทนกราฟ
+  - ทุกตารางมีคำอธิบาย (caption) สำหรับ screen reader และกราฟ Tableau แต่ละอันมีชื่อกำกับ
   - ทุกช่องในฟอร์มมี label
 - **แอนิเมชัน**: ถ้าตั้งค่าเครื่องให้ลดการเคลื่อนไหว (`prefers-reduced-motion`) เว็บจะข้ามแอนิเมชันและแสดงผลทันที
 - รองรับมือถือ แท็บเล็ต และเดสก์ท็อป
@@ -205,7 +207,7 @@ movie-project/
 | อาการ | วิธีแก้ |
 |---|---|
 | บันทึกไม่ได้ ขึ้นว่าไฟล์ถูกเปิดค้าง | ปิดไฟล์ `data/movies.xlsx` ในโปรแกรม Excel แล้วกดบันทึกอีกครั้ง |
-| กราฟไม่ขึ้น | ตรวจว่ามีไฟล์ `static/js/vendor/chart.umd.js` อยู่ (ตัวเลขทั้งหมดยังดูได้จากตารางใต้กราฟ) |
+| หน้าวิเคราะห์ขึ้นว่า "ยังไม่มีไฟล์ผลวิเคราะห์" | วาง `analysis.xlsx` ไว้ใน `data/` และตรวจชื่อชีตตามตารางด้านบน |
 | Dashboard ไม่ขึ้น | หน้านี้ต้องต่ออินเทอร์เน็ตเพื่อโหลดจาก Tableau Public และต้องใส่ `TABLEAU_URL` ใน `app.py` แล้ว |
 | ขึ้น `Address already in use` | มีเว็บรันค้างอยู่ ปิด Terminal เดิม หรือเปลี่ยนพอร์ตใน `app.run(port=5001)` |
 | อยากเริ่มข้อมูลใหม่จากต้นฉบับ | ลบไฟล์ `data/movies.xlsx` แล้วรัน `python app.py` ระบบจะสร้างใหม่จาก `movies.csv` |
