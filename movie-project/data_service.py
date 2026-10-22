@@ -1,11 +1,14 @@
 """Data layer for CineScope.
 
-Everything that touches the Excel file lives here:
-- first-run conversion from data/movies.csv to data/movies.xlsx
+Everything that touches the Excel file lives here. data/movies.xlsx is one
+workbook: the "movies" sheet is the web's data, the other sheets hold the
+group's Analysis ToolPak results.
+- first-run conversion (from data/movies.csv, or a raw "movies" sheet)
 - data cleaning (rating merge, splitting the "released" column)
 - reading the workbook (with a small cache keyed on file modification time)
-- safe writing (write to a temp file, then replace the original)
+- safe writing that replaces only the "movies" sheet (temp file, then replace)
 - add / update / delete a movie, and server-side form validation
+- reading the Analysis ToolPak results (never written by the web)
 
 Statistics and models are NOT here; they belong in analysis.py.
 """
@@ -13,6 +16,7 @@ Statistics and models are NOT here; they belong in analysis.py.
 import os
 from datetime import date, datetime
 
+import openpyxl
 import pandas as pd
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -128,36 +132,99 @@ def prepare_loaded(df):
 # Reading / writing Excel
 # ---------------------------------------------------------------------------
 
+# data/movies.xlsx is ONE workbook shared with the group's Excel work:
+#   - sheet "movies": the movie table the web reads and writes
+#   - every other sheet (Analysis ToolPak results, ...) is kept untouched
+# Note: openpyxl cannot keep Excel charts/images, so do not put charts in
+# this workbook; the ToolPak result tables (plain values) are kept safely.
+
 _cache = {"mtime": None, "df": None}
+_checked = {"mtime": None}
 
 
-def ensure_excel():
-    """Create data/movies.xlsx from data/movies.csv on first run."""
-    if os.path.exists(XLSX_PATH):
-        return False
+def _movies_sheet_header():
+    """Header row of the "movies" sheet, or None when the sheet does not exist."""
+    workbook = openpyxl.load_workbook(XLSX_PATH, read_only=True)
+    try:
+        if SHEET_NAME not in workbook.sheetnames:
+            return None
+        first = next(workbook[SHEET_NAME].iter_rows(max_row=1, values_only=True), ())
+        return [str(v).strip() for v in first if v is not None]
+    finally:
+        workbook.close()
+
+
+def _read_csv():
     if not os.path.exists(CSV_PATH):
         raise FileNotFoundError(
             f"ไม่พบไฟล์ข้อมูล {CSV_PATH} กรุณาวาง movies.csv ไว้ในโฟลเดอร์ data/"
         )
-    raw = pd.read_csv(CSV_PATH)
-    write_excel(clean_raw_csv(raw))
-    return True
+    return pd.read_csv(CSV_PATH)
+
+
+def ensure_excel():
+    """Make sure data/movies.xlsx has a "movies" sheet in the web's format.
+
+    - no workbook yet          -> create it from data/movies.csv
+    - workbook without "movies" -> add the sheet from data/movies.csv
+    - "movies" is raw data      -> clean it once (add id, split "released", merge ratings)
+    Other sheets are always kept. Returns True when something was converted.
+    """
+    if not os.path.exists(XLSX_PATH):
+        write_excel(clean_raw_csv(_read_csv()))
+        return True
+    mtime = os.path.getmtime(XLSX_PATH)
+    if _checked["mtime"] == mtime:  # already checked this version of the file
+        return False
+
+    header = _movies_sheet_header()
+    converted = False
+    if header is None:
+        write_excel(clean_raw_csv(_read_csv()))
+        converted = True
+    elif "id" not in header and "released" in header:
+        raw = pd.read_excel(XLSX_PATH, sheet_name=SHEET_NAME, engine="openpyxl")
+        write_excel(clean_raw_csv(raw))
+        converted = True
+    _checked["mtime"] = os.path.getmtime(XLSX_PATH)
+    return converted
 
 
 def read_excel():
-    """Read the workbook from disk (no cache, no derived columns)."""
+    """Read the "movies" sheet from disk (no cache, no derived columns)."""
     return pd.read_excel(XLSX_PATH, sheet_name=SHEET_NAME, engine="openpyxl")
 
 
-def write_excel(df):
-    """Write the movie table safely.
+def _cell(value):
+    """Value for an Excel cell: None for missing, plain Python types for numpy."""
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
+        return None
+    return value.item() if hasattr(value, "item") else value
 
-    The data is written to a temporary file first and then moved over the
-    real file, so a crash mid-write never leaves a half-written workbook.
+
+def write_excel(df):
+    """Write the movie table safely, keeping every other sheet in the workbook.
+
+    Only the "movies" sheet is replaced (at the same position). The workbook is
+    saved to a temporary file first and then moved over the real file, so a
+    crash mid-write never leaves a half-written workbook.
     """
-    table = df[COLUMNS]
     try:
-        table.to_excel(TEMP_PATH, sheet_name=SHEET_NAME, index=False, engine="openpyxl")
+        if os.path.exists(XLSX_PATH):
+            workbook = openpyxl.load_workbook(XLSX_PATH)
+            position = 0
+            if SHEET_NAME in workbook.sheetnames:
+                position = workbook.sheetnames.index(SHEET_NAME)
+                del workbook[SHEET_NAME]
+            sheet = workbook.create_sheet(SHEET_NAME, position)
+        else:
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.title = SHEET_NAME
+        sheet.append(COLUMNS)
+        for row in df[COLUMNS].itertuples(index=False):
+            sheet.append([_cell(v) for v in row])
+        workbook.save(TEMP_PATH)
         os.replace(TEMP_PATH, XLSX_PATH)
     except PermissionError as exc:
         _remove_temp_file()
@@ -393,21 +460,18 @@ def validate_movie(form):
 
 
 # ---------------------------------------------------------------------------
-# Analysis ToolPak results (data/analysis.xlsx) - READ ONLY
+# Analysis ToolPak results (other sheets of data/movies.xlsx) - READ ONLY
 # ---------------------------------------------------------------------------
-# The group runs Excel's Analysis ToolPak in data/analysis.xlsx. The web only
-# reads that file and never writes to it: saving it with openpyxl would drop
-# Excel charts and other features. Values are found by their row labels
-# ("R Square", "Mean", ...), not by fixed cell addresses, so the layout can
-# shift a little without breaking anything.
+# The group runs Excel's Analysis ToolPak inside data/movies.xlsx. The web only
+# reads these sheets; write_excel() replaces the "movies" sheet and keeps them.
+# Values are found by their row labels ("R Square", "Mean", ...), not by fixed
+# cell addresses, so the layout can shift a little without breaking anything.
 
-ANALYSIS_XLSX_PATH = os.path.join(DATA_DIR, "analysis.xlsx")
 TOOLPAK_SHEETS = {
     "descriptive_prefix": "Descriptive",   # every sheet starting with this
     "correlation": "Correlation",
     "regression": "Regression",
     "regression_data": "Regression_Data",  # the X/Y columns given to Regression
-    "data": "movies",                      # the movie data the other tools used
 }
 
 _toolpak_cache = {"mtime": None, "data": None}
@@ -500,37 +564,34 @@ def parse_regression(rows):
 
 
 def read_toolpak_results():
-    """Read data/analysis.xlsx. Returns None when the file does not exist,
-    a dict with "error" when it cannot be read, otherwise the parsed results.
-    Re-read only when the file changes."""
-    if not os.path.exists(ANALYSIS_XLSX_PATH):
-        return None
-    mtime = os.path.getmtime(ANALYSIS_XLSX_PATH)
+    """Read the ToolPak sheets of data/movies.xlsx. Returns None when there are
+    no ToolPak results yet, a dict with "error" when they cannot be read,
+    otherwise the parsed results. Re-read only when the file changes."""
+    ensure_excel()
+    mtime = os.path.getmtime(XLSX_PATH)
     if _toolpak_cache["mtime"] == mtime:
         return _toolpak_cache["data"]
 
     try:
-        import openpyxl  # imported here: only needed for this read-only file
-        workbook = openpyxl.load_workbook(ANALYSIS_XLSX_PATH, data_only=True, read_only=True)
+        workbook = openpyxl.load_workbook(XLSX_PATH, data_only=True, read_only=True)
         try:
             descriptive = {}
             for name in workbook.sheetnames:
                 if name.startswith(TOOLPAK_SHEETS["descriptive_prefix"]):
                     descriptive.update(parse_descriptive(_sheet_rows(workbook, name)))
             data = {
-                "path": ANALYSIS_XLSX_PATH,
-                "modified": datetime.fromtimestamp(mtime),
                 "sheets": workbook.sheetnames,
                 "descriptive": descriptive,
                 "correlation": parse_correlation(_sheet_rows(workbook, TOOLPAK_SHEETS["correlation"])),
                 "regression": parse_regression(_sheet_rows(workbook, TOOLPAK_SHEETS["regression"])),
                 "regression_data": _rows_to_frame(_sheet_rows(workbook, TOOLPAK_SHEETS["regression_data"])),
-                "data": _rows_to_frame(_sheet_rows(workbook, TOOLPAK_SHEETS["data"])),
             }
         finally:
             workbook.close()
+        if not (data["descriptive"] or data["correlation"]["pairs"] or data["regression"]["stats"]):
+            data = None  # the workbook has no ToolPak sheets yet
     except Exception as exc:  # a broken or locked file must not break the page
-        data = {"error": f"อ่านไฟล์ analysis.xlsx ไม่ได้ ({exc.__class__.__name__}: {exc})"}
+        data = {"error": f"อ่านผล Analysis ToolPak ใน movies.xlsx ไม่ได้ ({exc.__class__.__name__}: {exc})"}
 
     _toolpak_cache["mtime"] = mtime
     _toolpak_cache["data"] = data

@@ -19,9 +19,10 @@
     runtime: $("runtime-slider"),
     year: $("year-slider"),
     rating: $("rating-select"),
-    budgetOut: $("budget-output"),
-    runtimeOut: $("runtime-output"),
-    yearOut: $("year-output"),
+    budgetInput: $("budget-input"),     // typed in millions of dollars
+    runtimeInput: $("runtime-input"),
+    yearInput: $("year-input"),
+    budgetFull: $("budget-full"),
     stage: $("sim-stage"),
     clapper: $("sim-clapper"),
     clapperScene: $("clapper-scene"),
@@ -85,22 +86,106 @@
     return Math.round((1000 * Math.log(budget / BUDGET_MIN)) / Math.log(BUDGET_MAX / BUDGET_MIN));
   }
 
-  function updateOutputs() {
-    const budget = sliderToBudget(Number(els.budget.value));
-    els.budgetOut.textContent = formatMoney(budget);
-    els.budget.setAttribute("aria-valuetext", formatMoney(budget));
-    els.runtimeOut.textContent = `${els.runtime.value} นาที`;
-    els.runtime.setAttribute("aria-valuetext", `${els.runtime.value} นาที`);
-    els.yearOut.textContent = els.year.value;
+  /* ------------------------------------- number boxes <-> sliders (in sync) */
+  // Each value can be typed in its number box or set with its slider.
+  // The number boxes are the source of truth for the simulation.
+  const FIELDS = {
+    budget: {
+      input: els.budgetInput, slider: els.budget, error: $("budget-error"),
+      label: "ทุนสร้าง", min: BUDGET_MIN, max: BUDGET_MAX, integer: false,
+      fromInput: (text) => Math.round(Number(text) * 1e6),           // millions -> dollars
+      toInput: (dollars) => String(+(dollars / 1e6).toFixed(3)),     // dollars -> millions
+      toSlider: (dollars) => budgetToSlider(dollars),
+      fromSlider: (position) => sliderToBudget(Number(position)),
+      describe: (dollars) => `$${formatNumber(dollars)}`,
+      range: `${formatMoney(BUDGET_MIN)} ถึง ${formatMoney(BUDGET_MAX)}`,
+    },
+    runtime: {
+      input: els.runtimeInput, slider: els.runtime, error: $("runtime-error"),
+      label: "ความยาว", min: Number(els.runtime.min), max: Number(els.runtime.max), integer: true,
+      fromInput: Number, toInput: String, toSlider: (v) => v, fromSlider: Number,
+      describe: (v) => `${v} นาที`,
+      range: `${els.runtime.min} ถึง ${els.runtime.max} นาที`,
+    },
+    year: {
+      input: els.yearInput, slider: els.year, error: $("year-error"),
+      label: "ปีที่ฉาย", min: Number(els.year.min), max: Number(els.year.max), integer: true,
+      fromInput: Number, toInput: String, toSlider: (v) => v, fromSlider: Number,
+      describe: (v) => String(v),
+      range: `${els.year.min} ถึง ${els.year.max}`,
+    },
+  };
+
+  // Returns { value } when the typed text is valid, otherwise { error }.
+  function parseField(field) {
+    const text = field.input.value.trim();
+    if (text === "" || (field.input.validity && field.input.validity.badInput)) {
+      return { error: `กรุณาพิมพ์${field.label}เป็นตัวเลข` };
+    }
+    const value = field.fromInput(text);
+    if (!Number.isFinite(value)) return { error: `กรุณาพิมพ์${field.label}เป็นตัวเลข` };
+    if (field.integer && !Number.isInteger(value)) return { error: `${field.label}ต้องเป็นจำนวนเต็ม` };
+    if (value < field.min || value > field.max) return { error: `${field.label}ต้องอยู่ระหว่าง ${field.range}` };
+    return { value };
   }
 
-  function readInputs() {
+  function showFieldError(field, message) {
+    field.error.textContent = message || "";
+    field.error.hidden = !message;
+    if (message) field.input.setAttribute("aria-invalid", "true");
+    else field.input.removeAttribute("aria-invalid");
+  }
+
+  function describeSlider(field, value) {
+    field.slider.setAttribute("aria-valuetext", field.describe(value));
+    if (field === FIELDS.budget) els.budgetFull.textContent = `= $${formatNumber(value)}`;
+  }
+
+  // Typing: move the slider when the number is valid; complain on leaving the box.
+  function onType(field) {
+    const { value, error } = parseField(field);
+    if (error) {
+      if (field === FIELDS.budget) els.budgetFull.textContent = ""; // don't show a stale amount
+      return;
+    }
+    field.slider.value = field.toSlider(value);
+    describeSlider(field, value);
+    showFieldError(field, "");
+  }
+
+  // Sliding: write the slider's value into the number box.
+  function onSlide(field) {
+    const value = field.fromSlider(field.slider.value);
+    field.input.value = field.toInput(value);
+    describeSlider(field, value);
+    showFieldError(field, "");
+  }
+
+  // Validate every number box; show errors and return null when something is wrong.
+  function readNumbers() {
+    const values = {};
+    let firstInvalid = null;
+    for (const [name, field] of Object.entries(FIELDS)) {
+      const { value, error } = parseField(field);
+      showFieldError(field, error);
+      if (error && !firstInvalid) firstInvalid = field;
+      values[name] = value;
+    }
+    if (firstInvalid) {
+      firstInvalid.input.focus();
+      announce(firstInvalid.error.textContent);
+      return null;
+    }
+    return values;
+  }
+
+  function readInputs(numbers) {
     const genre = form.querySelector('input[name="genre"]:checked');
     return {
       genre: genre ? genre.value : "",
-      budget: sliderToBudget(Number(els.budget.value)),
-      runtime: Number(els.runtime.value),
-      year: Number(els.year.value),
+      budget: numbers.budget,
+      runtime: numbers.runtime,
+      year: numbers.year,
       rating: els.rating.value,
     };
   }
@@ -268,11 +353,13 @@
 
   async function run() {
     if (state.running) return;
+    const numbers = readNumbers();
+    if (!numbers) return; // a number box is empty or out of range: errors are shown
     state.running = true;
     els.button.disabled = true;
     els.stage.setAttribute("aria-busy", "true");
 
-    const input = readInputs();
+    const input = readInputs(numbers);
     const pending = requestSimulation(input); // runs while the animation plays
 
     state.take += 1;
@@ -333,9 +420,14 @@
   }
 
   /* ---------------------------------------------------------------- init */
-  els.budget.value = budgetToSlider(Number(form.dataset.budgetDefault));
-  updateOutputs();
-  [els.budget, els.runtime, els.year].forEach((slider) => slider.addEventListener("input", updateOutputs));
+  // Start values: the median budget (typed exactly) and the defaults in the HTML.
+  els.budgetInput.value = FIELDS.budget.toInput(Number(form.dataset.budgetDefault));
+  Object.values(FIELDS).forEach((field) => {
+    onType(field);
+    field.input.addEventListener("input", () => onType(field));
+    field.input.addEventListener("change", () => showFieldError(field, parseField(field).error));
+    field.slider.addEventListener("input", () => onSlide(field));
+  });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     run();

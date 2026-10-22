@@ -82,8 +82,8 @@ DEFAULT_GENRE_COLOR = "#7c8799"
 NAV_ITEMS = [
     ("home", "หน้าแรก", ""),
     ("movies", "รายการหนัง", ""),
-    ("analysis", "วิเคราะห์ข้อมูล", ""),
     ("simulator", "Box Office Simulator", ""),
+    ("analysis", "วิเคราะห์ข้อมูล", ""),
     ("dashboard", "Dashboard", ""),
 ]
 
@@ -320,7 +320,7 @@ def movie_delete(movie_id):
 
 @app.route("/analysis", endpoint="analysis")
 def analysis_page():
-    """Results the group computed with Excel's Analysis ToolPak (data/analysis.xlsx)."""
+    """Results the group computed with Excel's Analysis ToolPak (sheets in data/movies.xlsx)."""
     report = analysis.toolpak_report(data_service.load_movies(), data_service.read_toolpak_results())
     return render_template("analysis.html", report=report)
 

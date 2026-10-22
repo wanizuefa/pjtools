@@ -156,6 +156,7 @@
                 <span aria-hidden="true">✏️</span> แก้ไข
               </a>
               <form method="post" action="{{ url_for('movie_delete', movie_id=movie.id) }}"
+                    data-loading-text="กำลังลบหนังออกจาก Excel"
                     data-confirm='ต้องการลบ "{{ movie.name }}" ({{ movie.year | int }}) ออกจากไฟล์ Excel ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้'>
                 <input type="hidden" name="next" value="{{ next_url }}">
                 <button class="btn btn--small btn--danger" type="submit" aria-label="ลบ {{ movie.name }}">

@@ -83,6 +83,7 @@
 </div>
 
 <form class="movie-form panel" id="movie-form" method="post" novalidate data-validate
+      data-loading-text="{{ 'กำลังบันทึกการแก้ไขลง Excel' if is_edit else 'กำลังเพิ่มหนังลง Excel' }}"
       action="{{ url_for('movie_edit', movie_id=movie_id) if is_edit else url_for('movie_new') }}">
   <input type="hidden" name="next" value="{{ next_url }}">
 
@@ -151,6 +152,7 @@
   <h2 class="panel__title" id="danger-heading">ลบหนังเรื่องนี้</h2>
   <p>การลบจะนำแถวนี้ออกจากไฟล์ Excel ถาวร และไม่สามารถย้อนกลับได้</p>
   <form method="post" action="{{ url_for('movie_delete', movie_id=movie_id) }}"
+        data-loading-text="กำลังลบหนังออกจาก Excel"
         data-confirm='ต้องการลบ "{{ values.get('name', '') }}" ออกจากไฟล์ Excel ใช่หรือไม่? การลบไม่สามารถย้อนกลับได้'>
     <input type="hidden" name="next" value="{{ next_url }}">
     <button class="btn btn--danger" type="submit">ลบหนังเรื่องนี้</button>

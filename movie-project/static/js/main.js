@@ -177,6 +177,7 @@ function initConfirmDialogs() {
     if (!dialog || typeof dialog.showModal !== "function") {
       if (window.confirm(message)) {
         markUserAction();
+        showLoading(form.dataset.loadingText);
         form.submit();
       }
       return;
@@ -192,6 +193,7 @@ function initConfirmDialogs() {
   dialog.addEventListener("close", () => {
     if (dialog.returnValue === "confirm" && pendingForm) {
       markUserAction();
+      showLoading(pendingForm.dataset.loadingText);
       pendingForm.submit(); // submit() skips the submit event, so no loop
     } else if (returnFocusTo) {
       returnFocusTo.focus();
@@ -331,11 +333,17 @@ function initFormValidation() {
       markUserAction();
       const button = form.querySelector('[type="submit"]');
       if (button) button.disabled = true;
+      // Let the clapperboard snap shut first, then show the loading screen.
       const clapper = document.getElementById("clapper");
       if (clapper && !prefersReducedMotion()) {
         event.preventDefault();
         clapper.classList.add("is-clapping");
-        window.setTimeout(() => form.submit(), 380);
+        window.setTimeout(() => {
+          showLoading(form.dataset.loadingText);
+          form.submit();
+        }, 380);
+      } else {
+        showLoading(form.dataset.loadingText);
       }
     });
   });
@@ -397,6 +405,51 @@ function initCounters() {
 function markUserAction() {
   if (typeof CineAudio !== "undefined") CineAudio.markUserAction();
 }
+
+/* ---------------------------------------------------------------------------
+   Loading screen while a save/delete is written to Excel (takes ~2 seconds).
+   A film-leader countdown 3-2-1 runs until the next page loads.
+   ------------------------------------------------------------------------- */
+const loading = { timer: null, slowTimer: null };
+
+function showLoading(title) {
+  const screen = document.getElementById("loading-screen");
+  if (!screen) return;
+  document.getElementById("loading-title").textContent = title || "กำลังบันทึกลง Excel";
+  document.getElementById("loading-text").textContent = "กำลังเขียนไฟล์ data/movies.xlsx กรุณารอสักครู่";
+  screen.hidden = false;
+  document.body.setAttribute("aria-busy", "true");
+
+  const number = document.getElementById("leader-number");
+  let count = 3;
+  number.textContent = String(count);
+  window.clearInterval(loading.timer);
+  if (!prefersReducedMotion()) {
+    loading.timer = window.setInterval(() => {
+      count = count === 1 ? 3 : count - 1;
+      number.textContent = String(count);
+    }, 1000);
+  }
+  // If the server takes unusually long, say so instead of spinning silently.
+  window.clearTimeout(loading.slowTimer);
+  loading.slowTimer = window.setTimeout(() => {
+    document.getElementById("loading-text").textContent =
+      "ใช้เวลานานกว่าปกติ ถ้าหน้านี้ไม่เปลี่ยน ให้ตรวจว่าเว็บยังรันอยู่ และไม่ได้เปิดไฟล์ movies.xlsx ค้างไว้";
+  }, 15000);
+}
+
+function hideLoading() {
+  const screen = document.getElementById("loading-screen");
+  if (!screen) return;
+  screen.hidden = true;
+  document.body.removeAttribute("aria-busy");
+  window.clearInterval(loading.timer);
+  window.clearTimeout(loading.slowTimer);
+}
+
+// Coming back with the browser's Back button can restore this page from cache
+// with the loading screen still showing; hide it again.
+window.addEventListener("pageshow", hideLoading);
 
 document.addEventListener("DOMContentLoaded", () => {
   initNavToggle();

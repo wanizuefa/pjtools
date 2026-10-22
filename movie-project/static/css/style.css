@@ -1985,12 +1985,60 @@ select:focus-visible {
   font-weight: 600;
 }
 
-.slider-field__value {
+/* Number box next to each slider: type an exact value */
+.number-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.number-box__affix {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.number-box__input {
+  width: 5.2rem;
+  min-height: 40px;
+  padding: 2px 10px;
   font-family: var(--font-display);
   font-size: 1.6rem;
   letter-spacing: 0.04em;
-  color: var(--gold);
   line-height: 1.1;
+  text-align: right;
+  color: var(--gold);
+  background: var(--bg-deep);
+  border: 1px solid var(--gold-dark);
+  border-radius: 8px;
+  /* no spin buttons (they hide the digits); arrow keys still step the value */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.number-box__input::-webkit-outer-spin-button,
+.number-box__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-box__input--budget {
+  width: 6.8rem;
+}
+
+.number-box__input--short {
+  width: 4.6rem;
+}
+
+.number-box__full {
+  margin: 2px 0 0;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider-field .field-error {
+  margin-top: 4px;
 }
 
 input[type="range"] {
@@ -2857,6 +2905,132 @@ input[type="range"]:hover {
   padding: 0;
   background: none;
   color: var(--gold-light);
+}
+
+/* ==========================================================================
+   Loading screen while saving to Excel: a film-leader countdown
+   ========================================================================== */
+
+.loading-screen {
+  --hole: rgba(244, 233, 205, 0.85);
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 16px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(242, 193, 78, 0.16), transparent 45%),
+    rgba(5, 6, 13, 0.94);
+  backdrop-filter: blur(3px);
+  animation: loading-in 0.2s ease-out both;
+}
+
+.loading-screen[hidden] {
+  display: none;
+}
+
+@keyframes loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* film edges with sprocket holes, top and bottom */
+.loading-screen::before,
+.loading-screen::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34px;
+  background-color: #120d09;
+  background-image: radial-gradient(ellipse 7px 5px at 50% 50%, var(--hole) 92%, transparent 100%);
+  background-size: 26px 34px;
+  background-repeat: repeat-x;
+}
+
+.loading-screen::before {
+  top: 0;
+  border-bottom: 2px solid #000;
+}
+
+.loading-screen::after {
+  bottom: 0;
+  border-top: 2px solid #000;
+}
+
+.leader {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 200px;
+  height: 200px;
+  margin-bottom: 12px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle, #efe2bd 0%, #d8c28c 60%, #a88b52 100%);
+  border: 6px solid #1b140b;
+  box-shadow: 0 0 0 4px var(--gold-dark), 0 0 40px rgba(242, 193, 78, 0.35);
+  animation: leader-flicker 0.18s steps(2) infinite;
+}
+
+/* the dark wedge that sweeps round once per number */
+.leader__sweep {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(rgba(45, 30, 10, 0.5) 0deg 100deg, transparent 100deg);
+  animation: leader-sweep 1s linear infinite;
+}
+
+/* two rings and a crosshair, like a real countdown leader */
+.leader__rings {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle, transparent 0 36%, #2a1f10 36% 37.5%, transparent 37.5% 60%, #2a1f10 60% 61.5%, transparent 61.5%),
+    linear-gradient(90deg, transparent calc(50% - 1px), #2a1f10 calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(0deg, transparent calc(50% - 1px), #2a1f10 calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+.leader__number {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 6.5rem;
+  line-height: 1;
+  color: #1d1404;
+}
+
+@keyframes leader-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes leader-flicker {
+  50% {
+    filter: brightness(0.94);
+  }
+}
+
+.loading-screen__title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--gold-light);
+}
+
+.loading-screen__text {
+  margin: 0;
+  max-width: 420px;
+  color: var(--text-muted);
 }
 
 /* ==========================================================================

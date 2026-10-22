@@ -3,8 +3,8 @@
 {% block title %}วิเคราะห์ข้อมูล{% endblock %}
 
 {#
-  Everything on this page comes from data/analysis.xlsx, computed by the group
-  with Excel's Analysis ToolPak. The web only reads and displays those numbers.
+  Everything on this page comes from the Analysis ToolPak sheets of data/movies.xlsx,
+  computed by the group in Excel. The web only reads and displays those numbers.
 #}
 
 {# ToolPak numbers as Excel shows them: huge sums of squares in scientific notation #}
@@ -37,16 +37,16 @@
 </section>
 
 <p class="analysis-intro">
-  ผลทั้งหมดในหน้านี้มาจากไฟล์ <code>data/analysis.xlsx</code> ที่กลุ่มคำนวณด้วย
-  <strong>Analysis ToolPak ของ Excel</strong> เว็บอ่านไฟล์นี้มาแสดงอย่างเดียว ไม่ได้คำนวณใหม่และไม่แก้ไขไฟล์
+  ผลทั้งหมดในหน้านี้มาจากชีตผล <strong>Analysis ToolPak ของ Excel</strong> ในไฟล์ <code>data/movies.xlsx</code>
+  ที่กลุ่มคำนวณไว้ เว็บอ่านมาแสดงอย่างเดียว ไม่ได้คำนวณใหม่ และเวลาบันทึกข้อมูลหนัง เว็บแก้เฉพาะชีต <code>movies</code> ชีตผลวิเคราะห์ไม่ถูกแตะ
 </p>
 
 {% if report.status == 'missing' %}
 <section class="panel toolpak-empty">
-  <h2 class="panel__title">ยังไม่มีไฟล์ผลวิเคราะห์</h2>
-  <p>วางไฟล์ <code>analysis.xlsx</code> ที่รัน Analysis ToolPak แล้วไว้ในโฟลเดอร์ <code>data/</code> แล้วรีเฟรชหน้านี้</p>
+  <h2 class="panel__title">ยังไม่มีผล Analysis ToolPak</h2>
+  <p>เปิด <code>data/movies.xlsx</code> ใน Excel (ปิดเว็บก่อน) แล้วรัน Analysis ToolPak โดยวางผลแต่ละอย่างไว้ในชีตใหม่ บันทึกแล้วรีเฟรชหน้านี้</p>
   <p class="footer-muted">ชื่อชีตที่เว็บอ่าน: <code>Descriptive…</code> (ขึ้นต้นด้วย Descriptive), <code>Correlation</code>,
-    <code>Regression</code>, <code>Regression_Data</code> และ <code>movies</code> (ข้อมูลที่ใช้รัน ToolPak)</p>
+    <code>Regression</code> และ <code>Regression_Data</code> (ข้อมูล X/Y ที่ใช้รัน Regression)</p>
 </section>
 
 {% elif report.status == 'error' %}
@@ -58,19 +58,35 @@
 
 <p class="source-line">
   <span class="source-chip source-chip--excel">Excel</span>
-  ข้อมูลที่ใช้รัน ToolPak: {{ fresh.excel_movies | number }} เรื่อง
-  ({{ fresh.excel_financial | number }} เรื่องที่มีทั้งทุนสร้างและรายได้)
-  · บันทึกไฟล์ล่าสุด {{ report.modified.strftime('%d/%m/%Y %H:%M') }}
+  ผลจากชีต Analysis ToolPak ในไฟล์ <code>data/movies.xlsx</code>
+  {% if reg.stats.get('Observations') %}· Regression ใช้ข้อมูล {{ reg.stats['Observations'] | number }} เรื่อง{% endif %}
+  {% if not fresh.stale and fresh.checks %}· ตรงกับข้อมูลปัจจุบันในชีต <code>movies</code>{% endif %}
 </p>
 
 {% if fresh.stale %}
 <div class="toolpak-status toolpak-status--stale" role="note">
-  <p><strong>ข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak</strong></p>
+  <p><strong>ข้อมูลหนังเปลี่ยนไปหลังรัน ToolPak</strong></p>
   <p>
-    Excel ใช้ข้อมูล {{ fresh.excel_movies | number }} เรื่อง แต่ตอนนี้ <code>movies.xlsx</code> มี
-    {{ fresh.current_movies | number }} เรื่อง ผลในหน้านี้จึงยังไม่รวมข้อมูลที่เพิ่มหรือแก้ไขภายหลัง
-    ถ้าต้องการให้เป็นปัจจุบัน ให้อัปเดตข้อมูลใน <code>analysis.xlsx</code> แล้วรัน Analysis ToolPak ใหม่
+    มีการเพิ่ม แก้ไข หรือลบหนังหลังจากรัน Analysis ToolPak ผลในหน้านี้จึงยังไม่รวมข้อมูลล่าสุด
+    ถ้าต้องการให้เป็นปัจจุบัน ให้ปิดเว็บ เปิด <code>data/movies.xlsx</code> ใน Excel แล้วรัน Analysis ToolPak ใหม่
   </p>
+  <div class="table-scroll">
+    <table class="data-table">
+      <caption class="sr-only">ค่าที่ไม่ตรงกันระหว่างผล ToolPak กับข้อมูลปัจจุบัน</caption>
+      <thead>
+        <tr><th scope="col">ค่าที่ไม่ตรง</th><th scope="col" class="col-num">ผล ToolPak</th><th scope="col" class="col-num">ข้อมูลปัจจุบัน</th></tr>
+      </thead>
+      <tbody>
+        {% for c in fresh.checks if not c.ok %}
+        <tr>
+          <th scope="row">{{ c.label }}</th>
+          <td class="col-num">{{ excel_num(c.excel) }}</td>
+          <td class="col-num">{{ excel_num(c.current) if c.current is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
 

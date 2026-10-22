@@ -1,7 +1,7 @@
 """Statistics for CineScope.
 
 - Analysis page: shows the results the group computed with Excel's Analysis
-  ToolPak (read from data/analysis.xlsx by data_service). toolpak_report()
+  ToolPak (the other sheets of data/movies.xlsx, read by data_service). toolpak_report()
   only arranges those Excel numbers and writes short captions from them.
 - Home page, Dashboard and Box Office Simulator: small calculations on the
   current movie data (key findings, highlights, regression models with numpy).
@@ -444,9 +444,9 @@ def simulate(models, df, genre, budget, runtime, year, rating=""):
 # ---------------------------------------------------------------------------
 # Analysis page: results from Excel's Analysis ToolPak
 # ---------------------------------------------------------------------------
-# Only arranges the numbers read from data/analysis.xlsx and writes captions
-# from them. The single check against the current data is how many movies the
-# Excel file used, so the page can say when the ToolPak needs to be re-run.
+# Only arranges the numbers read from the ToolPak sheets of data/movies.xlsx
+# and writes captions from them. toolpak_freshness() compares a few of them
+# with the current data, so the page can say when ToolPak needs to be re-run.
 
 DESCRIPTIVE_LABELS = {
     "Mean": "ค่าเฉลี่ย (Mean)",
@@ -540,23 +540,58 @@ def toolpak_report(df, toolpak):
         for (a, b), r in toolpak["correlation"]["pairs"].items()
     ]
 
-    excel_movies = len(toolpak["data"]) if not toolpak["data"].empty else None
-    excel_financial = reg["stats"].get("Observations")
-    current_financial = len(financial_rows(df))
-    stale = ((excel_movies is not None and excel_movies != len(df))
-             or (excel_financial is not None and int(excel_financial) != current_financial))
     return {
         "status": "ok",
-        "modified": toolpak["modified"],
         "regression": reg,
         "regression_caption": regression_caption,
         "descriptive": descriptive,
         "correlation": correlation,
-        "freshness": {
-            "stale": stale,
-            "excel_movies": excel_movies,
-            "current_movies": len(df),
-            "excel_financial": int(excel_financial) if excel_financial is not None else None,
-            "current_financial": current_financial,
-        },
+        "freshness": toolpak_freshness(df, toolpak),
     }
+
+
+def same_value(excel, current, tolerance=1e-6):
+    return current is not None and abs(excel - current) <= tolerance * max(abs(excel), abs(current), 1e-12)
+
+
+def toolpak_freshness(df, toolpak):
+    """Do the ToolPak results still match the current "movies" sheet?
+
+    ToolPak writes fixed numbers, so after the web adds or edits movies they
+    become out of date. A few of the ToolPak numbers are compared with the
+    same numbers from the current data; any difference means "re-run ToolPak".
+    Only these checks use the current data; the page shows the Excel values.
+    """
+    checks = []
+
+    def check(label, excel, current, kind="int"):
+        if excel is not None:
+            checks.append({"label": label, "excel": excel, "current": current, "kind": kind,
+                           "ok": same_value(excel, current)})
+
+    reg = toolpak["regression"]
+    x_coef = next((c for c in reg["coefficients"] if c["name"].lower() != "intercept"), None)
+    reg_data = toolpak["regression_data"]
+    if x_coef is not None:
+        x = x_coef["name"].lower()
+        y = next((str(c).lower() for c in reg_data.columns if str(c).lower() != x), None)
+        if x in df and y in df:
+            pair = df[[x, y]].dropna()
+            r, _ = pearson_r(pair[x], pair[y])
+            check("Regression: จำนวนข้อมูล (Observations)", reg["stats"].get("Observations"), float(len(pair)))
+            check("Regression: R Square", reg["stats"].get("R Square"), r * r if r is not None else None, "dec4")
+
+    for variable, stats in toolpak["descriptive"].items():
+        column = variable.lower()
+        if column in df:
+            values = df[column].dropna()
+            check(f"Descriptive {variable}: จำนวน (Count)", stats.get("Count"), float(len(values)))
+            check(f"Descriptive {variable}: ค่าเฉลี่ย (Mean)", stats.get("Mean"),
+                  float(values.mean()) if len(values) else None, "dec4")
+
+    for (a, b), excel_r in toolpak["correlation"]["pairs"].items():
+        if a.lower() in df and b.lower() in df:
+            current_r, _ = pearson_r(df[a.lower()], df[b.lower()])
+            check(f"Correlation: r ({a} กับ {b})", excel_r, current_r, "dec4")
+
+    return {"stale": any(not c["ok"] for c in checks), "checks": checks}

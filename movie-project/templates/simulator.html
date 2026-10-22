@@ -44,40 +44,65 @@
       </div>
     </fieldset>
 
+    {# Each number can be typed in the box or set with the slider; they stay in sync. #}
     <div class="slider-field">
       <div class="slider-field__head">
-        <label for="budget-slider">ทุนสร้าง</label>
-        <output id="budget-output" for="budget-slider" class="slider-field__value"></output>
+        <label for="budget-input">ทุนสร้าง</label>
+        <span class="number-box">
+          <span class="number-box__affix" aria-hidden="true">$</span>
+          <input type="number" id="budget-input" class="number-box__input number-box__input--budget"
+                 inputmode="decimal" step="any"
+                 min="{{ '%g' % (r.budget_min / 1e6) }}" max="{{ '%g' % (r.budget_max / 1e6) }}"
+                 aria-describedby="budget-full budget-hint budget-error">
+          <span class="number-box__affix">ล้าน</span>
+        </span>
       </div>
-      <input type="range" id="budget-slider" min="0" max="1000" step="1" value="500">
+      <p class="number-box__full" id="budget-full"></p>
+      <input type="range" id="budget-slider" min="0" max="1000" step="1" value="500"
+             aria-label="ทุนสร้าง (แถบเลื่อน)">
       <div class="slider-field__scale" aria-hidden="true">
         <span>{{ r.budget_min | money }}</span><span>{{ r.budget_max | money }}</span>
       </div>
-      <p class="field-hint">ช่วงตามข้อมูลจริง ปรับแบบสเกลลอการิทึมเพื่อให้เลือกทุนน้อยๆ ได้ละเอียด</p>
+      <p class="field-hint" id="budget-hint">
+        พิมพ์เป็นล้านดอลลาร์ เช่น 21.5 = $21,500,000 (ใส่ได้ถึงหลักพันดอลลาร์ เช่น 0.25 = $250,000)
+        · แถบเลื่อนใช้สเกลลอการิทึมเพื่อให้เลือกทุนน้อยๆ ได้ละเอียด
+      </p>
+      <p class="field-error" id="budget-error" hidden></p>
     </div>
 
     <div class="slider-field">
       <div class="slider-field__head">
-        <label for="runtime-slider">ความยาว</label>
-        <output id="runtime-output" for="runtime-slider" class="slider-field__value"></output>
+        <label for="runtime-input">ความยาว</label>
+        <span class="number-box">
+          <input type="number" id="runtime-input" class="number-box__input number-box__input--short"
+                 inputmode="numeric" step="1" min="{{ r.runtime_min }}" max="{{ r.runtime_max }}"
+                 value="{{ r.runtime_default }}" aria-describedby="runtime-error">
+          <span class="number-box__affix">นาที</span>
+        </span>
       </div>
-      <input type="range" id="runtime-slider" name="runtime"
+      <input type="range" id="runtime-slider" name="runtime" aria-label="ความยาว (แถบเลื่อน)"
              min="{{ r.runtime_min }}" max="{{ r.runtime_max }}" step="1" value="{{ r.runtime_default }}">
       <div class="slider-field__scale" aria-hidden="true">
         <span>{{ r.runtime_min }} นาที</span><span>{{ r.runtime_max }} นาที</span>
       </div>
+      <p class="field-error" id="runtime-error" hidden></p>
     </div>
 
     <div class="slider-field">
       <div class="slider-field__head">
-        <label for="year-slider">ปีที่ฉาย</label>
-        <output id="year-output" for="year-slider" class="slider-field__value"></output>
+        <label for="year-input">ปีที่ฉาย</label>
+        <span class="number-box">
+          <input type="number" id="year-input" class="number-box__input number-box__input--short"
+                 inputmode="numeric" step="1" min="{{ r.year_min }}" max="{{ r.year_max }}"
+                 value="{{ r.year_default }}" aria-describedby="year-error">
+        </span>
       </div>
-      <input type="range" id="year-slider" name="year"
+      <input type="range" id="year-slider" name="year" aria-label="ปีที่ฉาย (แถบเลื่อน)"
              min="{{ r.year_min }}" max="{{ r.year_max }}" step="1" value="{{ r.year_default }}">
       <div class="slider-field__scale" aria-hidden="true">
         <span>{{ r.year_min }}</span><span>{{ r.year_max }}</span>
       </div>
+      <p class="field-error" id="year-error" hidden></p>
     </div>
 
     <div class="field">

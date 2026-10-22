@@ -35,7 +35,7 @@
         <li>
           <a class="nav-link{% if item.active %} is-active{% endif %}" href="{{ item.url }}"
              {% if item.active %}aria-current="page"{% endif %}>
-            <span aria-hidden="true">{{ item.icon }}</span> {{ item.label }}
+            {% if item.icon %}<span aria-hidden="true">{{ item.icon }}</span> {% endif %}{{ item.label }}
           </a>
         </li>
         {% endfor %}
@@ -95,6 +95,17 @@
       </div>
     </div>
   </footer>
+
+  {# Loading screen while the Excel file is being saved: a film-leader countdown #}
+  <div class="loading-screen" id="loading-screen" hidden>
+    <div class="leader" aria-hidden="true">
+      <span class="leader__sweep"></span>
+      <span class="leader__rings"></span>
+      <span class="leader__number" id="leader-number">3</span>
+    </div>
+    <p class="loading-screen__title" id="loading-title" role="status">กำลังบันทึกลง Excel</p>
+    <p class="loading-screen__text" id="loading-text">กำลังเขียนไฟล์ data/movies.xlsx กรุณารอสักครู่</p>
+  </div>
 
   {# Delete confirmation dialog, shared by every page #}
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">

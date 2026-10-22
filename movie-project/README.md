@@ -5,7 +5,7 @@
 เว็บแอปสำหรับโปรเจกต์กลุ่มวิชา Data Tools หัวข้อ **"ปัจจัยที่ส่งผลต่อความสำเร็จของภาพยนตร์ ปี 1980–2020"**
 ใช้ชุดข้อมูล Movie Industry (`movies.csv` 7,668 เรื่อง 15 คอลัมน์) วัดความสำเร็จ 2 ด้าน คือ **รายได้ (gross)** และ **คะแนนผู้ชม (score)**
 
-เว็บนี้อ่าน เพิ่ม แก้ไข และลบข้อมูลในไฟล์ Excel (`data/movies.xlsx`) จริง หน้าวิเคราะห์ข้อมูลแสดงผลที่กลุ่มคำนวณด้วย **Analysis ToolPak ของ Excel** (`data/analysis.xlsx`) ส่วนตัวเลขในหน้าแรก Dashboard และ Simulator คำนวณใหม่จาก `movies.xlsx` ทุกครั้ง
+เว็บนี้อ่าน เพิ่ม แก้ไข และลบข้อมูลในไฟล์ Excel (`data/movies.xlsx`) จริง และหน้าวิเคราะห์ข้อมูลแสดงผลที่กลุ่มคำนวณด้วย **Analysis ToolPak ของ Excel** ในไฟล์เดียวกัน ส่วนตัวเลขในหน้าแรก Dashboard และ Simulator คำนวณใหม่จากชีต `movies` ทุกครั้ง
 
 ---
 
@@ -21,7 +21,7 @@ python app.py
 
 จากนั้นเปิดเบราว์เซอร์ไปที่ **http://127.0.0.1:5000** และกด `Ctrl+C` ใน Terminal เพื่อปิดเว็บ
 
-> **รันครั้งแรก** ถ้ายังไม่มี `data/movies.xlsx` ระบบจะแปลงจาก `data/movies.csv` และทำความสะอาดข้อมูลให้อัตโนมัติ หลังจากนั้นทุกหน้าใช้ไฟล์ `.xlsx` เป็นแหล่งข้อมูลหลัก
+> **รันครั้งแรก** ถ้ายังไม่มี `data/movies.xlsx` ระบบจะแปลงจาก `data/movies.csv` และทำความสะอาดข้อมูลให้อัตโนมัติ ถ้ามีไฟล์อยู่แล้วแต่ชีต `movies` ยังเป็นข้อมูลดิบ (ไม่มีคอลัมน์ `id`) ระบบจะแปลงชีตนั้นให้ครั้งเดียว โดยไม่แตะชีตอื่น
 
 <details>
 <summary>แบบใช้ virtual environment (แนะนำ ไม่ปนกับ Python ของเครื่อง)</summary>
@@ -82,24 +82,31 @@ TABLEAU_URL = "https://public.tableau.com/views/MovieIndustry/Dashboard"
 | 🎞️ รายการหนัง | `/movies` | ค้นหาจากชื่อเรื่อง ผู้กำกับ หรือนักแสดง กรองตามช่วงปี ประเภท เรท เรียงตามปี คะแนน ทุนสร้าง รายได้ แบ่งหน้าละ 20 เรื่อง ค่าการค้นหาเก็บใน URL (กดย้อนกลับแล้วยังเห็นผลเดิม) บนมือถือแสดงเป็นการ์ด |
 | ➕ เพิ่ม / ✏️ แก้ไข | `/movies/new`, `/movies/<id>/edit` | ฟอร์มเดียวกัน ครบทุกคอลัมน์ ตรวจข้อมูลทั้งฝั่งเบราว์เซอร์และเซิร์ฟเวอร์ บันทึกลง Excel แล้วแสดงข้อความรูปตั๋วหนังพร้อมเสียงสเลท |
 | 🗑️ ลบ | ปุ่มในตารางและในหน้าแก้ไข | มีกล่องยืนยันก่อนลบทุกครั้ง |
-| 📊 วิเคราะห์ข้อมูล | `/analysis` | ผลจาก Excel Analysis ToolPak (`data/analysis.xlsx`): Regression (SUMMARY OUTPUT, ANOVA, Coefficients), Descriptive Statistics และ Correlation พร้อมสรุปผลที่เขียนจากตัวเลขใน Excel และแจ้งเตือนเมื่อข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak |
+| 📊 วิเคราะห์ข้อมูล | `/analysis` | ผลจาก Excel Analysis ToolPak (ชีตผลวิเคราะห์ใน `data/movies.xlsx`): Regression (SUMMARY OUTPUT, ANOVA, Coefficients), Descriptive Statistics และ Correlation พร้อมสรุปผลที่เขียนจากตัวเลขใน Excel และแจ้งเตือนเมื่อข้อมูลในเว็บเปลี่ยนไปหลังรัน ToolPak |
 | 🎬 Box Office Simulator | `/simulator` | สร้างหนังสมมติ (ประเภท ทุนสร้าง ความยาว เรท ปี) แล้วดูรายได้ ROI คะแนนที่คาดการณ์ ผล BLOCKBUSTER / HIT / BREAK EVEN / FLOP และหนังจริงที่ใกล้เคียง 5 เรื่อง |
 | 🗺️ Dashboard | `/dashboard` | ฝัง Tableau Public แบบ responsive พร้อมคำอธิบายกราฟทั้ง 5 |
 | 🔧 API | `/api/simulate` (POST), `/api/status` | ผล Simulator เป็น JSON และสถานะไฟล์ข้อมูล |
 
-### หน้าวิเคราะห์ข้อมูลกับไฟล์ analysis.xlsx
+### ไฟล์ movies.xlsx (ไฟล์เดียว ใช้ทั้งเว็บและ Analysis ToolPak)
 
-เว็บอ่าน `data/analysis.xlsx` อย่างเดียว (ไม่เขียนทับ เพื่อไม่ให้กราฟหรือการตั้งค่าใน Excel หาย) และหาค่าจากชื่อแถว เช่น "R Square" ไม่ได้อ่านจากตำแหน่งเซลล์ตายตัว ชีตที่เว็บอ่าน:
+| ชีต | เนื้อหา | ใครเขียน |
+|---|---|---|
+| `movies` | ข้อมูลหนังทั้งหมด (มีคอลัมน์ `id`) | เว็บ (ทุกครั้งที่เพิ่ม แก้ไข ลบ) |
+| `Regression` | ผล Regression จาก ToolPak (SUMMARY OUTPUT) | กลุ่ม (Excel) |
+| `Regression_Data` | ข้อมูล X/Y ที่ใช้รัน Regression | กลุ่ม (Excel) |
+| `Descriptive…` | ผล Descriptive Statistics (ทุกชีตที่ชื่อขึ้นต้นด้วย `Descriptive` เช่น `Descriptive_Score`) | กลุ่ม (Excel) |
+| `Correlation` | ผล Correlation จาก ToolPak | กลุ่ม (Excel) |
 
-| ชีต | เนื้อหา |
-|---|---|
-| `Regression` | ผล Regression จาก ToolPak (SUMMARY OUTPUT) |
-| `Regression_Data` | ข้อมูล X/Y ที่ใช้รัน Regression |
-| `Descriptive…` | ผล Descriptive Statistics (ทุกชีตที่ชื่อขึ้นต้นด้วย `Descriptive` เช่น `Descriptive_Score`) |
-| `Correlation` | ผล Correlation จาก ToolPak |
-| `movies` | ข้อมูลหนังที่ใช้รัน ToolPak (ใช้เทียบจำนวนกับข้อมูลปัจจุบันในเว็บ) |
+- เวลาบันทึก เว็บแทนที่**เฉพาะชีต `movies`** ชีตอื่นอยู่ครบและอยู่ตำแหน่งเดิม
+- เว็บหาค่าในชีตผลวิเคราะห์จากชื่อแถว เช่น "R Square" ไม่ได้อ่านจากตำแหน่งเซลล์ตายตัว
+- ผล ToolPak ไม่คำนวณใหม่เอง หน้าวิเคราะห์จะเทียบค่าบางตัวของ ToolPak (จำนวนข้อมูล, Mean, R Square, r) กับข้อมูลปัจจุบัน ถ้าไม่ตรง จะแจ้งว่าข้อมูลหนังเปลี่ยนไปหลังรัน ToolPak ให้รัน ToolPak ใหม่
 
-ผล ToolPak ไม่คำนวณใหม่เอง ถ้าเพิ่มหรือแก้ไขหนังในเว็บ หน้าวิเคราะห์จะขึ้นแจ้งเตือนว่าข้อมูลเปลี่ยนไป ให้อัปเดตข้อมูลใน `analysis.xlsx` แล้วรัน Analysis ToolPak ใหม่
+**ข้อควรระวัง**
+
+- **อย่าเปิด `movies.xlsx` ค้างไว้ขณะใช้เว็บ** ถ้าเปิดอยู่ เว็บจะบันทึกไม่ได้ (ขึ้นข้อความเตือน) ให้ปิดเว็บก่อนเปิดไฟล์ไปรัน ToolPak
+- **อย่าใส่กราฟหรือรูปภาพของ Excel ในไฟล์นี้** ไลบรารีที่เว็บใช้เขียน Excel (openpyxl) เก็บกราฟไว้ไม่ได้ กราฟจะหายเมื่อเว็บบันทึกครั้งถัดไป (ตาราง ToolPak ที่เป็นตัวเลขไม่หาย)
+- **ถ้ารัน ToolPak ใหม่** คอลัมน์ในชีต `movies` เรียงตามแบบของเว็บ (`id`, `name`, `rating`, `genre`, `year`, `release_date`, `release_country`, `score`, ...) ให้เลือกช่วงข้อมูลตามชื่อคอลัมน์
+- บันทึกแต่ละครั้งใช้เวลาประมาณ 2 วินาที เพราะต้องเขียนทั้งไฟล์เพื่อรักษาชีตผลวิเคราะห์ไว้
 
 ---
 
@@ -163,8 +170,7 @@ movie-project/
 ├── README.md
 ├── data/
 │   ├── movies.csv      ข้อมูลต้นฉบับ
-│   ├── movies.xlsx     แหล่งข้อมูลหลัก (สร้างอัตโนมัติตอนรันครั้งแรก)
-│   └── analysis.xlsx   ผลวิเคราะห์จาก Excel Analysis ToolPak (เว็บอ่านอย่างเดียว)
+│   └── movies.xlsx     ชีต movies = ข้อมูลของเว็บ, ชีตอื่น = ผล Analysis ToolPak
 ├── templates/
 │   ├── base.html       โครงหน้า: navbar, ม่าน, flash message รูปตั๋ว, footer แถบฟิล์ม
 │   ├── index.html      หน้าแรก
@@ -207,10 +213,10 @@ movie-project/
 | อาการ | วิธีแก้ |
 |---|---|
 | บันทึกไม่ได้ ขึ้นว่าไฟล์ถูกเปิดค้าง | ปิดไฟล์ `data/movies.xlsx` ในโปรแกรม Excel แล้วกดบันทึกอีกครั้ง |
-| หน้าวิเคราะห์ขึ้นว่า "ยังไม่มีไฟล์ผลวิเคราะห์" | วาง `analysis.xlsx` ไว้ใน `data/` และตรวจชื่อชีตตามตารางด้านบน |
+| หน้าวิเคราะห์ขึ้นว่า "ยังไม่มีผล Analysis ToolPak" | เปิด `movies.xlsx` ใน Excel (ปิดเว็บก่อน) รัน ToolPak แล้วตั้งชื่อชีตตามตารางด้านบน |
 | Dashboard ไม่ขึ้น | หน้านี้ต้องต่ออินเทอร์เน็ตเพื่อโหลดจาก Tableau Public และต้องใส่ `TABLEAU_URL` ใน `app.py` แล้ว |
 | ขึ้น `Address already in use` | มีเว็บรันค้างอยู่ ปิด Terminal เดิม หรือเปลี่ยนพอร์ตใน `app.run(port=5001)` |
-| อยากเริ่มข้อมูลใหม่จากต้นฉบับ | ลบไฟล์ `data/movies.xlsx` แล้วรัน `python app.py` ระบบจะสร้างใหม่จาก `movies.csv` |
+| อยากเริ่มข้อมูลใหม่จากต้นฉบับ | ลบไฟล์ `data/movies.xlsx` แล้วรัน `python app.py` ระบบจะสร้างใหม่จาก `movies.csv` (**ชีตผล ToolPak จะหายไปด้วย** ต้องรันใหม่) |
 | VS Code ขึ้นเตือน `Import "flask" could not be resolved` | เลือก Python interpreter ที่ติดตั้งแพ็กเกจไว้ (`Ctrl+Shift+P` → Python: Select Interpreter) |
 
 ---
