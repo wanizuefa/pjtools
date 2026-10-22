@@ -98,7 +98,7 @@ def top_by_total_gross(df, column, n=TOP_N):
     ], float(data["gross"].sum())
 
 
-<<<<<<< HEAD
+
 def top_earners(df):
     """Q4: Companies and directors with the highest total gross."""
     companies, total_gross = top_by_total_gross(df, "company")
@@ -192,8 +192,7 @@ def roi_by_genre(df):
     return {"ok": True, "chart": chart_series(rows), "caption": caption, "left_out": left_out}
 
 
-=======
->>>>>>> 118dbdc91cb76da493f09fd4c25e3e78735d2538
+
 # ---------------------------------------------------------------------------
 # Home page and Dashboard (computed from the current movie data)
 # ---------------------------------------------------------------------------
